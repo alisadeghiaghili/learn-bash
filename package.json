@@ -1,0 +1,16 @@
+{
+  "name": "learn-bash",
+  "version": "0.1.0",
+  "description": "An interactive bash visualization and tutorial",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "dev": "npx --yes serve -l 5173 .",
+    "start": "npx --yes serve -l 5173 ."
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
