@@ -3,8 +3,6 @@
 An interactive bash visualization and tutorial. Type real shell commands in a
 safe sandbox and watch cwd, files, pipes, and exit codes update live.
 
-Inspired by [LearnGitBranching](https://github.com/pcottle/learnGitBranching).
-
 ## Run
 
 Open `index.html` in a browser (ES modules need a local server):
@@ -37,6 +35,10 @@ Then open http://localhost:5173
 ```bash
 npm test
 ```
+
+## License
+
+Apache-2.0. See [LICENSE](./LICENSE).
 
 ## Architecture
 

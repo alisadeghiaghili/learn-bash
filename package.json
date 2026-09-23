@@ -9,7 +9,7 @@
     "dev": "npx --yes serve -l 5173 .",
     "start": "npx --yes serve -l 5173 ."
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=20"
   }

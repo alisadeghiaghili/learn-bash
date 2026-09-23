@@ -2,7 +2,7 @@
 
 ## Product
 
-Interactive bash visualization and tutorial, modeled on LearnGitBranching.
+Interactive bash visualization and tutorial.
 Make invisible shell state (cwd, filesystem, pipes, exit codes) visible while
 the learner types real bash commands in a sandbox.
 
