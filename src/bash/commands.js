@@ -60,11 +60,282 @@ const COMMANDS = {
   grep: cmdGrep,
   chmod: cmdChmod,
   find: cmdFind,
+  sort: cmdSort,
+  cut: cmdCut,
+  tr: cmdTr,
+  tee: cmdTee,
+  export: cmdExport,
+  unset: cmdUnset,
+  env: cmdEnv,
+  test: cmdTest,
+  '[': cmdTest,
+  source: cmdSource,
+  '.': cmdSource,
+  bash: cmdBashScript,
+  sh: cmdBashScript,
+  exit: cmdExit,
   clear: cmdClear,
   true: () => result(),
   false: () => result('', '', 1),
   help: cmdHelp,
 };
+
+/**
+ * Sort lines of stdin or a file.
+ *
+ * Args:
+ *     ctx: command context
+ *     args: CLI args
+ *     stdin: pipeline stdin
+ * Returns:
+ *     CmdResult
+ */
+function cmdSort(ctx, args, stdin) {
+  const reverse = args.includes('-r');
+  const files = args.filter((a) => !a.startsWith('-'));
+  let text = stdin ?? '';
+  if (files.length) {
+    const abs = resolvePath(ctx.cwd, files[0], ctx.env.HOME);
+    const node = ctx.fs.getNode(abs);
+    if (!node || node.type !== 'file') {
+      return result('', `sort: cannot read: ${files[0]}: No such file or directory`, 2);
+    }
+    text = node.content;
+  }
+  const lines = text.split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  lines.sort();
+  if (reverse) lines.reverse();
+  return result(lines.map((l) => l + '\n').join(''));
+}
+
+/**
+ * Cut fields from stdin or a file.
+ *
+ * Args:
+ *     ctx: command context
+ *     args: -d delim -f N / -c N
+ *     stdin: pipeline stdin
+ * Returns:
+ *     CmdResult
+ */
+function cmdCut(ctx, args, stdin) {
+  let delim = '\t';
+  let fields = null;
+  const files = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '-d') {
+      delim = args[i + 1] ?? '\t';
+      i += 1;
+      continue;
+    }
+    if (args[i] === '-f') {
+      fields = (args[i + 1] ?? '1').split(',').map((n) => parseInt(n, 10));
+      i += 1;
+      continue;
+    }
+    if (!args[i].startsWith('-')) files.push(args[i]);
+  }
+  let text = stdin ?? '';
+  if (files.length) {
+    const abs = resolvePath(ctx.cwd, files[0], ctx.env.HOME);
+    const node = ctx.fs.getNode(abs);
+    if (!node || node.type !== 'file') {
+      return result('', `cut: ${files[0]}: No such file or directory`, 1);
+    }
+    text = node.content;
+  }
+  const lines = text.split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  const out = lines.map((line) => {
+    if (!fields) return line;
+    const parts = line.split(delim);
+    return fields.map((n) => parts[n - 1] ?? '').join(delim);
+  });
+  return result(out.map((l) => l + '\n').join(''));
+}
+
+/**
+ * Translate characters (basic tr SET1 SET2).
+ *
+ * Args:
+ *     ctx: command context
+ *     args: sets
+ *     stdin: pipeline stdin
+ * Returns:
+ *     CmdResult
+ */
+function cmdTr(ctx, args, stdin) {
+  const [a, b] = args.filter((x) => !x.startsWith('-'));
+  if (!a || !b) return result('', 'tr: usage: tr SET1 SET2', 1);
+  const src = stdin ?? '';
+  const map = new Map();
+  for (let i = 0; i < a.length; i += 1) map.set(a[i], b[Math.min(i, b.length - 1)]);
+  let out = '';
+  for (const ch of src) out += map.has(ch) ? map.get(ch) : ch;
+  return result(out);
+}
+
+/**
+ * Tee stdin to files and stdout.
+ *
+ * Args:
+ *     ctx: command context
+ *     args: files
+ *     stdin: pipeline stdin
+ * Returns:
+ *     CmdResult
+ */
+function cmdTee(ctx, args, stdin) {
+  const append = args.includes('-a');
+  const files = args.filter((a) => !a.startsWith('-'));
+  const text = stdin ?? '';
+  for (const f of files) {
+    const abs = resolvePath(ctx.cwd, f, ctx.env.HOME);
+    const existing = ctx.fs.getNode(abs);
+    if (existing && existing.type === 'file') {
+      existing.content = append ? existing.content + text : text;
+    } else if (!existing) {
+      const { dir, base } = splitPath(abs);
+      ctx.fs.attach(dir, createFile(base, text));
+    }
+  }
+  return result(text);
+}
+
+/**
+ * export NAME=value or export NAME
+ */
+function cmdExport(ctx, args) {
+  for (const a of args) {
+    const eq = a.indexOf('=');
+    if (eq === -1) continue;
+    const name = a.slice(0, eq);
+    const value = a.slice(eq + 1);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+      return result('', `export: \`${a}': not a valid identifier`, 1);
+    }
+    ctx.env[name] = value;
+    ctx.shell.env[name] = value;
+  }
+  return result();
+}
+
+function cmdUnset(ctx, args) {
+  for (const name of args) delete ctx.env[name];
+  return result();
+}
+
+function cmdEnv(ctx) {
+  const keys = Object.keys(ctx.env).filter((k) => k !== '?' && k !== '$').sort();
+  return result(keys.map((k) => `${k}=${ctx.env[k]}\n`).join(''));
+}
+
+/**
+ * test / [ — file tests, string tests, integer comparisons, ! -a -o.
+ *
+ * Args:
+ *     ctx: command context
+ *     args: expression words (trailing ] optional)
+ * Returns:
+ *     CmdResult code 0 true / 1 false
+ */
+function cmdTest(ctx, args) {
+  let expr = args;
+  if (expr[expr.length - 1] === ']') expr = expr.slice(0, -1);
+  if (expr.length === 0) return result('', '', 1);
+  const ok = evalTestExpr(expr, ctx);
+  return result('', '', ok ? 0 : 1);
+}
+
+function evalTestExpr(expr, ctx) {
+  // Handle ! and parentheses-less -a/-o with simple left-to-right for MVP depth
+  if (expr[0] === '!' && expr.length > 1) return !evalTestExpr(expr.slice(1), ctx);
+
+  if (expr.length === 1) return expr[0] !== '' && expr[0] !== '0';
+
+  if (expr.length === 2) {
+    const [op, a] = expr;
+    const abs = resolvePath(ctx.cwd, a, ctx.env.HOME);
+    const node = ctx.fs.getNode(abs);
+    switch (op) {
+      case '-e':
+        return !!node;
+      case '-f':
+        return !!node && node.type === 'file';
+      case '-d':
+        return !!node && node.type === 'dir';
+      case '-s':
+        return !!node && node.type === 'file' && node.content.length > 0;
+      case '-z':
+        return a === '';
+      case '-n':
+        return a !== '';
+      default:
+        return false;
+    }
+  }
+
+  if (expr.length === 3) {
+    const [x, op, y] = expr;
+    switch (op) {
+      case '=':
+      case '==':
+        return x === y;
+      case '!=':
+        return x !== y;
+      case '-eq':
+        return Number(x) === Number(y);
+      case '-ne':
+        return Number(x) !== Number(y);
+      case '-lt':
+        return Number(x) < Number(y);
+      case '-le':
+        return Number(x) <= Number(y);
+      case '-gt':
+        return Number(x) > Number(y);
+      case '-ge':
+        return Number(x) >= Number(y);
+      default:
+        return false;
+    }
+  }
+
+  // a -a b / a -o b
+  for (let i = 0; i < expr.length; i += 1) {
+    if (expr[i] === '-o') {
+      return evalTestExpr(expr.slice(0, i), ctx) || evalTestExpr(expr.slice(i + 1), ctx);
+    }
+  }
+  for (let i = 0; i < expr.length; i += 1) {
+    if (expr[i] === '-a') {
+      return evalTestExpr(expr.slice(0, i), ctx) && evalTestExpr(expr.slice(i + 1), ctx);
+    }
+  }
+  return false;
+}
+
+function cmdSource(ctx, args) {
+  const path = args[0];
+  if (!path) return result('', 'source: filename argument required', 2);
+  const abs = resolvePath(ctx.cwd, path, ctx.env.HOME);
+  const node = ctx.fs.getNode(abs);
+  if (!node || node.type !== 'file') {
+    return result('', `source: ${path}: No such file or directory`, 1);
+  }
+  return ctx.shell.executeScript(node.content, { nested: true, captureHistory: false });
+}
+
+function cmdBashScript(ctx, args) {
+  const path = args.find((a) => !a.startsWith('-'));
+  if (!path) return result('', 'bash: usage: bash file', 2);
+  return cmdSource(ctx, [path]);
+}
+
+function cmdExit(ctx, args) {
+  const code = args[0] !== undefined ? Number(args[0]) || 0 : Number(ctx.env['?'] || 0);
+  return result('', '', code);
+}
 
 /**
  * Look up a command function.
@@ -589,7 +860,9 @@ function cmdHelp() {
   return result(
     'LearnBash built-ins:\n' +
       names.map((n) => `  ${n}`).join('\n') +
-      '\n\nApp commands:\n  levels  goal  undo  reset  help\n' +
-      'Operators:  |  >  >>  <  ;  &&  ||\n'
+      '\n\nApp commands:\n  levels  goal  quiz  review  undo  reset  help\n' +
+      'Operators:  |  >  >>  <  ;  &&  ||\n' +
+      'Expansion:  $VAR  ${VAR}  $(cmd)  `cmd`  $((1+2))  * ? [a-z]  ~\n' +
+      'Control:  if [ test ]; then ...; fi   for i in ...; do ...; done   while ...; do ...; done\n'
   );
 }

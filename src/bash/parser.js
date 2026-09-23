@@ -67,6 +67,8 @@ export function tokenize(line) {
       if (c === "'") {
         i += 1;
         let closed = false;
+        // Mark single-quoted runs so expansion skips $ and ~.
+        word += '\uE000';
         while (i < n) {
           if (line[i] === "'") {
             closed = true;
@@ -76,6 +78,7 @@ export function tokenize(line) {
           word += line[i];
           i += 1;
         }
+        word += '\uE001';
         if (!closed) throw new SyntaxError("unmatched '");
         continue;
       }
@@ -97,6 +100,41 @@ export function tokenize(line) {
           i += 1;
         }
         if (!closed) throw new SyntaxError('unmatched "');
+        continue;
+      }
+      // Keep $( ... ) and $(( ... )) as one word even with spaces.
+      if (c === '$' && line[i + 1] === '(') {
+        const start = i;
+        i += 1;
+        let depth = 0;
+        while (i < n) {
+          if (line[i] === '(') depth += 1;
+          else if (line[i] === ')') {
+            depth -= 1;
+            if (depth === 0) {
+              i += 1;
+              break;
+            }
+          } else if (line[i] === "'" || line[i] === '"') {
+            const q = line[i];
+            i += 1;
+            while (i < n && line[i] !== q) {
+              if (line[i] === '\\') i += 1;
+              i += 1;
+            }
+            i += 1;
+            continue;
+          }
+          i += 1;
+        }
+        word += line.slice(start, i);
+        continue;
+      }
+      if (c === '`') {
+        const end = line.indexOf('`', i + 1);
+        if (end === -1) throw new SyntaxError('unmatched `');
+        word += line.slice(i, end + 1);
+        i = end + 1;
         continue;
       }
       word += c;
@@ -168,8 +206,32 @@ export function parseLine(line) {
       if (tok.value === '>' || tok.value === '>>') {
         const next = tokens[i + 1];
         if (!next || next.type !== 'word') throw new SyntaxError('syntax error near redirection');
-        current.stdoutFile = next.value;
-        current.stdoutAppend = tok.value === '>>';
+        // fd-aware: previous word may be a bare fd number like 2
+        if (
+          current.args.length &&
+          /^\d+$/.test(current.args[current.args.length - 1]) &&
+          current.args.length >= 1
+        ) {
+          const fd = current.args.pop();
+          if (fd !== '1') {
+            current.stderrFile = next.value;
+            current.stderrAppend = tok.value === '>>';
+            current.stdoutFile = current.stdoutFile; // keep
+            if (fd === '2') {
+              current.stderrFile = next.value;
+              current.stderrAppend = tok.value === '>>';
+            } else if (fd === '1') {
+              current.stdoutFile = next.value;
+              current.stdoutAppend = tok.value === '>>';
+            }
+          } else {
+            current.stdoutFile = next.value;
+            current.stdoutAppend = tok.value === '>>';
+          }
+        } else {
+          current.stdoutFile = next.value;
+          current.stdoutAppend = tok.value === '>>';
+        }
         i += 1;
         expectWord = true;
         continue;
@@ -253,5 +315,12 @@ export function expandWord(word, env, home = '/home/learner') {
 }
 
 function newStage() {
-  return { args: [], stdinFile: null, stdoutFile: null, stdoutAppend: false };
+  return {
+    args: [],
+    stdinFile: null,
+    stdoutFile: null,
+    stdoutAppend: false,
+    stderrFile: null,
+    stderrAppend: false,
+  };
 }
