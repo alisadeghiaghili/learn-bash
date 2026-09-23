@@ -879,6 +879,27 @@ body {
   color: var(--accent);
 }
 
+.quiz-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.quiz-choice {
+  width: 100%;
+}
+
+.quiz-choice:disabled {
+  opacity: 0.75;
+  cursor: default;
+}
+
+.quiz-feedback {
+  margin-bottom: 8px;
+  max-width: 68ch;
+}
+
 .celebrate-next {
   font-size: 13px;
   color: var(--muted);

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { createSandboxShell, Shell } from '../src/bash/shell.js';
 import { buildFS } from '../src/bash/fs.js';
 import { LEVELS, checkLevel, golfScore } from '../src/level/levels.js';
+// Full per-level solve matrix lives in engine.test.js.
 
 /**
  * Build the default level home shell.
@@ -95,33 +96,6 @@ test('syntax errors exit 2', () => {
   const t = shell.execute('echo "open');
   assert.equal(t.code, 2);
   assert.match(t.stderr, /unmatched/);
-});
-
-test('all levels can be solved with their par commands', () => {
-  const solutions = {
-    'b1-pwd': ['pwd'],
-    'b2-ls': ['ls'],
-    'b3-cd': ['cd notes'],
-    'b4-echo': ['echo hello bash'],
-    'f1-touch': ['touch report.txt'],
-    'f2-mkdir': ['mkdir src', 'cd src'],
-    'f3-mv': ['mv draft.txt final.txt'],
-    't1-cat': ['cat notes/todo.txt'],
-    't2-redirect': ['echo done > status.txt'],
-    't3-append': ['echo second >> log.txt'],
-    's1-pipe': ['cat notes/todo.txt | wc -l'],
-    's2-grep': ['grep pipes notes/todo.txt'],
-  };
-
-  for (const level of LEVELS) {
-    const cmds = solutions[level.id];
-    assert.ok(cmds, `missing solution for ${level.id}`);
-    const shell = levelShell(level);
-    const traces = cmds.map((c) => shell.execute(c));
-    const { ok, failures } = checkLevel(level, shell, traces);
-    assert.equal(ok, true, `${level.id} failed: ${failures.join('; ')}`);
-    assert.ok(golfScore(traces) <= level.par, `${level.id} over par`);
-  }
 });
 
 test('failed checks report a reason', () => {

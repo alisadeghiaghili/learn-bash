@@ -36,6 +36,8 @@ const BASE_COMMANDS = [
   'help',
   'levels',
   'goal',
+  'quiz',
+  'review',
   'undo',
   'reset',
 ];

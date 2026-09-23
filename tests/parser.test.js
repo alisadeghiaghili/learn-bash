@@ -19,7 +19,10 @@ test('tokenize splits words and operators', () => {
 
 test('tokenize keeps quoted spaces and strips quotes', () => {
   const tokens = tokenize("echo 'a b' \"c d\"");
-  assert.deepEqual(tokens.map((t) => t.value), ['echo', 'a b', 'c d']);
+  const strip = (s) => s.replace(//g, '').replace(//g, '');
+  assert.deepEqual(tokens.map((t) => strip(t.value)), ['echo', 'a b', 'c d']);
+  // Single-quoted run is marked so expansion can skip it
+  assert.ok(tokens[1].value.includes(''));
 });
 
 test('tokenize rejects unmatched quotes', () => {

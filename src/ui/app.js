@@ -27,6 +27,7 @@ import {
   REPO_URL,
 } from './share.js';
 import { launchConfetti, playFanfare } from './confetti.js';
+import { quizForSeries, sampleReview, gradeQuiz } from '../level/assess.js';
 
 const state = {
   mode: /** @type {'sandbox' | 'level'} */ ('sandbox'),
@@ -59,6 +60,8 @@ export function init() {
 
   document.getElementById('btn-levels')?.addEventListener('click', () => openLevels());
   document.getElementById('btn-goal')?.addEventListener('click', () => showGoal(term));
+  document.getElementById('btn-quiz')?.addEventListener('click', () => openQuiz(term, 'current'));
+  document.getElementById('btn-review')?.addEventListener('click', () => openQuiz(term, 'review'));
   document.getElementById('btn-undo')?.addEventListener('click', () => handleLine('undo', term));
   document.getElementById('btn-reset')?.addEventListener('click', () => handleLine('reset', term));
   document.getElementById('btn-help')?.addEventListener('click', () => handleLine('help', term));
@@ -96,6 +99,8 @@ function layoutHTML() {
         <button type="button" id="btn-sandbox" class="btn">Sandbox</button>
         <button type="button" id="btn-levels" class="btn">Levels</button>
         <button type="button" id="btn-goal" class="btn">Goal</button>
+        <button type="button" id="btn-quiz" class="btn">Quiz</button>
+        <button type="button" id="btn-review" class="btn">Review</button>
         <button type="button" id="btn-undo" class="btn">Undo</button>
         <button type="button" id="btn-reset" class="btn">Reset</button>
         <button type="button" id="btn-help" class="btn">Help</button>
@@ -221,6 +226,16 @@ function handleLine(line, term) {
     if (line.trim()) term.pushHistory(line);
     showGoal(term);
     term.focus();
+    return;
+  }
+  if (trace.app === 'quiz') {
+    if (line.trim()) term.pushHistory(line);
+    openQuiz(term, 'current');
+    return;
+  }
+  if (trace.app === 'review') {
+    if (line.trim()) term.pushHistory(line);
+    openQuiz(term, 'review');
     return;
   }
   if (trace.app === 'reset') {
@@ -655,6 +670,106 @@ function showLevelDialog(level) {
 
 function closeModal() {
   document.getElementById('modal')?.classList.add('hidden');
+}
+
+/**
+ * Open a concept quiz (current series) or spaced review.
+ *
+ * Args:
+ *     term: terminal API
+ *     mode: 'current' | 'review'
+ */
+function openQuiz(term, mode) {
+  const items =
+    mode === 'review'
+      ? sampleReview(state.level?.series ?? null, solvedSeriesList(), 3)
+      : quizForSeries(state.level?.series ?? '*').slice(0, 3);
+
+  if (!items.length) {
+    term.print('No quiz items yet. Finish a level series first.');
+    term.focus();
+    return;
+  }
+
+  const modal = document.getElementById('modal');
+  const body = document.getElementById('modal-body');
+  document.getElementById('modal-title').textContent =
+    mode === 'review' ? 'Spaced review' : 'Concept quiz';
+
+  let idx = 0;
+  let score = 0;
+
+  const render = () => {
+    const item = items[idx];
+    body.innerHTML = `
+      <p class="brief">${escapeHtml(item.prompt)}</p>
+      <div class="quiz-choices">
+        ${item.choices
+          .map(
+            (c, i) =>
+              `<button type="button" class="level-row quiz-choice" data-i="${i}">
+                <span class="level-row-title">${escapeHtml(c)}</span>
+              </button>`
+          )
+          .join('')}
+      </div>
+      <div class="share-status quiz-feedback" data-quiz-feedback hidden></div>
+      <p class="par">Question ${idx + 1} / ${items.length} · score ${score}</p>
+    `;
+    body.querySelectorAll('.quiz-choice').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const pick = Number(btn.getAttribute('data-i'));
+        const g = gradeQuiz(item, pick);
+        if (g.ok) score += 1;
+        const fb = body.querySelector('[data-quiz-feedback]');
+        fb.hidden = false;
+        fb.textContent = g.ok ? `Correct. ${g.why}` : `Not quite. ${g.why}`;
+        body.querySelectorAll('.quiz-choice').forEach((b) => {
+          b.disabled = true;
+          if (Number(b.getAttribute('data-i')) === item.answer) {
+            b.style.borderColor = 'var(--accent)';
+          }
+        });
+        setTimeout(() => {
+          idx += 1;
+          if (idx < items.length) render();
+          else {
+            body.innerHTML = `
+              <p class="brief">Quiz done — ${score} / ${items.length}.</p>
+              <p class="hint">${
+                score === items.length
+                  ? 'Solid understanding, not just commands.'
+                  : 'Re-read the teach panels, then try Review later.'
+              }</p>
+            `;
+            const foot = document.createElement('div');
+            foot.className = 'win-actions';
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'btn primary';
+            close.textContent = 'Back to terminal';
+            close.addEventListener('click', () => {
+              closeModal();
+              term.focus();
+            });
+            foot.appendChild(close);
+            body.appendChild(foot);
+          }
+        }, 1200);
+      });
+    });
+  };
+
+  render();
+  modal.classList.remove('hidden');
+}
+
+function solvedSeriesList() {
+  const series = new Set();
+  for (const level of LEVELS) {
+    if (state.solved[level.id]?.solved) series.add(level.series);
+  }
+  return [...series];
 }
 
 function getTerm() {
