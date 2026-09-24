@@ -8,6 +8,7 @@ import { expandArgs, expandFields, globToRegExp } from './expand.js';
 import { getCommand, result as cmdResult } from './commands.js';
 import { parseScript, runStatements, needsControlFlow, simpleToLine } from './control.js';
 import { parseFunctionDef, expandProcessSub } from './features.js';
+import { expandBraces, matchCase, parseArrayAssign } from './advanced.js';
 
 /**
  * In-memory shell with filesystem, env, history, and undo.
@@ -50,6 +51,11 @@ export class Shell {
     /** @type {{ path: string, cmd: string }[]} */
     this.pendingConsumers = [];
     this._tmpN = 0;
+    /** @type {Map<string, string[]>} */
+    this.arrays = new Map();
+    this.optE = false;
+    this.optU = false;
+    this._returned = false;
   }
 
   /**
@@ -253,6 +259,16 @@ export class Shell {
       return { line, stages: [], stdout: '', stderr: '', code: 0, clear: false };
     }
 
+    // Array assignment: name=(a b c)
+    const arr = parseArrayAssign(trimmed);
+    if (arr && !nested) {
+      this.undoStack.push(this.capture());
+      if (captureHistory) this.history.push(trimmed);
+      this.arrays.set(arr.name, arr.items);
+      this.env[arr.name] = arr.items.join(' ');
+      return { line: trimmed, stages: [], stdout: '', stderr: '', code: 0, clear: false };
+    }
+
     // Function definition: name() { body }
     const fnDef = parseFunctionDef(trimmed);
     if (fnDef) {
@@ -339,7 +355,29 @@ export class Shell {
         if (stmt.type === 'simple') {
           const line = simpleToLine(stmt);
           if (!line) return { stdout: '', stderr: '', code: 0, clear: false };
-          return this._runPipelineLine(line);
+          const r = this._runPipelineLine(line);
+          if (r.stop) this._returned = true;
+          return r;
+        }
+        if (stmt.type === 'case') {
+          const wordLine = stmt.word;
+          const wordVal = wordLine.replace(/^\$/, '')
+            ? this._expandWordFull(wordLine, { shell: this, fs: this.fs, cwd: this.cwd, env: this.env }).join('')
+            : wordLine;
+          for (const arm of stmt.arms) {
+            if (arm.patterns.some((p) => {
+              try {
+                return new RegExp(
+                  '^' + p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$'
+                ).test(wordVal);
+              } catch {
+                return false;
+              }
+            })) {
+              return this._runControlSync(arm.body || 'true');
+            }
+          }
+          return { stdout: '', stderr: '', code: 0, clear: false };
         }
         if (stmt.type === 'if') {
           for (const br of stmt.branches) {
@@ -438,7 +476,7 @@ export class Shell {
     if (name === 'reset') {
       return { line: trimmed, stages: [], stdout: '', stderr: '', code: 0, clear: false, app: 'reset' };
     }
-    if (name === 'levels' || name === 'goal' || name === 'quiz' || name === 'review') {
+    if (name === 'levels' || name === 'goal' || name === 'quiz' || name === 'review' || name === 'predict' || name === 'inventory') {
       return { line: trimmed, stages: [], stdout: '', stderr: '', code: 0, clear: false, app: name };
     }
     return null;
@@ -551,6 +589,7 @@ export class Shell {
       stderr: combinedErr,
       code: lastCode,
       clear,
+      stop: false,
     };
   }
 
@@ -609,6 +648,7 @@ export class Shell {
       stderr: last.stderr,
       code: last.code,
       clear: last.clear ?? false,
+      stop: last.stop ?? false,
     };
   }
 
@@ -732,6 +772,10 @@ export class Shell {
       const unquoted = segments.filter((s) => !s.lit).map((s) => s.text).join('');
       if (/[*?[]/.test(unquoted)) return this._globSync(out);
       return [out];
+    }
+    // Brace expansion after parameter expansion
+    if (!word.includes('') && /\{[^{}]+,[^{}]*\}|\{[-0-9]+\.\.[-0-9]+\}/.test(out)) {
+      return expandBraces(out);
     }
     return [out];
   }

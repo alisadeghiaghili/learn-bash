@@ -38,8 +38,8 @@ import { evalDoubleBracket, unwrapDoubleBracket } from './features.js';
  * Returns:
  *     CmdResult
  */
-export function result(stdout = '', stderr = '', code = 0) {
-  return { stdout, stderr, code };
+export function result(stdout = '', stderr = '', code = 0, stop = false) {
+  return { stdout, stderr, code, stop };
 }
 
 const COMMANDS = {
@@ -76,6 +76,12 @@ const COMMANDS = {
   bash: cmdBashScript,
   sh: cmdBashScript,
   exit: cmdExit,
+  read: cmdRead,
+  xargs: cmdXargs,
+  sed: cmdSed,
+  local: cmdLocal,
+  return: cmdReturn,
+  set: cmdSet,
   clear: cmdClear,
   true: () => result(),
   false: () => result('', '', 1),
@@ -352,6 +358,110 @@ function cmdDoubleBracket(ctx, args) {
   const inner = unwrapDoubleBracket(args);
   const ok = evalDoubleBracket(inner, ctx);
   return result('', '', ok ? 0 : 1);
+}
+
+/**
+ * read [names...] from stdin (line-oriented).
+ */
+function cmdRead(ctx, args, stdin) {
+  const names = args.filter((a) => !a.startsWith('-'));
+  const text = stdin ?? '';
+  const line = text.split('\n')[0] ?? '';
+  const rest = text.split('\n').slice(1).join('\n');
+  if (!names.length) {
+    ctx.shell.env.REPLY = line;
+  } else if (names.length === 1) {
+    ctx.env[names[0]] = line;
+    ctx.shell.env[names[0]] = line;
+  } else {
+    const parts = line.split(/\s+/);
+    names.forEach((n, i) => {
+      const v = i === names.length - 1 ? parts.slice(i).join(' ') : (parts[i] ?? '');
+      ctx.env[n] = v;
+      ctx.shell.env[n] = v;
+    });
+  }
+  ctx.shell._lastReadRemainder = rest;
+  return result('', '', line === '' && !stdin ? 1 : 0);
+}
+
+/**
+ * xargs [cmd] — run cmd once with stdin words as arguments.
+ */
+function cmdXargs(ctx, args, stdin) {
+  const cmd = args[0] ?? 'echo';
+  const extra = args.slice(1);
+  const words = (stdin ?? '').split(/\s+/).filter(Boolean);
+  const line = [cmd, ...extra, ...words].join(' ');
+  return ctx.shell._runPipelineLine(line);
+}
+
+/**
+ * Minimal sed: sed s/old/new/g  (and s/old/new/).
+ */
+function cmdSed(ctx, args, stdin) {
+  const script = args.find((a) => a.startsWith('s/')) ?? args[0] ?? '';
+  const files = args.filter((a, i) => i > 0 && !a.startsWith('s/') && !a.startsWith('-'));
+  let text = stdin ?? '';
+  if (files.length) {
+    const abs = resolvePath(ctx.cwd, files[0], ctx.env.HOME);
+    const node = ctx.fs.getNode(abs);
+    if (!node || node.type !== 'file') {
+      return result('', `sed: can't read ${files[0]}: No such file or directory`, 2);
+    }
+    text = node.content;
+  }
+  // Parse s/old/new/ or s/old/new/g without nested-regex pain
+  if (!script.startsWith('s/')) {
+    return result('', `sed: unsupported script: ${script}`, 1);
+  }
+  const body = script.slice(2);
+  let global = false;
+  let work = body;
+  if (work.endsWith('/g')) {
+    global = true;
+    work = work.slice(0, -2);
+  } else if (work.endsWith('/')) {
+    work = work.slice(0, -1);
+  }
+  const slash = work.indexOf('/');
+  if (slash === -1) return result('', `sed: unsupported script: ${script}`, 1);
+  const pat = work.slice(0, slash);
+  const rep = work.slice(slash + 1);
+  const esc = pat.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(esc, global ? 'g' : '');
+  const out = text
+    .split('\n')
+    .map((line) => line.replace(re, rep))
+    .join('\n');
+  return result(out);
+}
+
+function cmdLocal(ctx, args) {
+  // Mark names as function-local (values still go to env for MVP simplicity)
+  for (const a of args) {
+    const eq = a.indexOf('=');
+    if (eq === -1) continue;
+    const name = a.slice(0, eq);
+    const value = a.slice(eq + 1);
+    ctx.env[name] = value;
+    ctx.shell.env[name] = value;
+    if (ctx.shell._localScope) ctx.shell._localScope.add(name);
+  }
+  return result();
+}
+
+function cmdReturn(ctx, args) {
+  const code = args[0] !== undefined ? Number(args[0]) || 0 : 0;
+  return result('', '', code, true);
+}
+
+function cmdSet(ctx, args) {
+  if (args.includes('-e')) ctx.shell.optE = true;
+  if (args.includes('+e')) ctx.shell.optE = false;
+  if (args.includes('-u')) ctx.shell.optU = true;
+  if (args.includes('+u')) ctx.shell.optU = false;
+  return result();
 }
 
 /**

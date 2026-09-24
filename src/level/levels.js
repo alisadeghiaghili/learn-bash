@@ -805,6 +805,90 @@ Why it exists: many tools (diff, wc, comm) want file arguments, not stdin. Proce
     ],
   },
 
+  {
+    id: 'c8-case',
+    series: 'Control',
+    title: 'case statement',
+    objective: 'Branch on a string with case.',
+    brief: 'Set X=yes, then use case so `yes` creates `flag.txt`.',
+    teach: `\`case $X in ... esac\` is pattern matching on a word — the bash switch. Patterns use glob syntax (\`*\`, \`?\`), not regex. Arms end with \`;;\`.
+
+\`case $X in yes) touch flag.txt ;; esac\` is the shape. Use \`*\` as the default arm. Prefer case when you match one value against many literals/flags; prefer if/\`[[\` when you compare two variables.
+
+case is expansion-safe and is how most CLI argument dispatch is written.`,
+    learning: [
+      'case matches glob patterns on one word',
+      ';; separates arms; * is default',
+      'case for dispatch; [[ for comparisons',
+    ],
+    hint: 'X=yes then case $X in yes) touch flag.txt ;; esac',
+    par: 2,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'X=yes', note: 'Set the subject' },
+      { command: 'case $X in yes) touch flag.txt ;; esac', note: 'Dispatch with case' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/flag.txt' },
+      { type: 'op_used', value: 'case' },
+    ],
+  },
+  {
+    id: 'c9-brace',
+    series: 'Control',
+    title: 'Brace expansion',
+    objective: 'Generate names with {a,b} braces.',
+    brief: 'Create `a.txt` and `b.txt` in one command using braces.',
+    teach: `Brace expansion runs **before** most other expansions: \`touch {a,b}.txt\` becomes \`touch a.txt b.txt\`.
+
+\`{1..3}\` is a numeric range. Braces are not globs — they do not consult the filesystem. \`{a,b}\` always expands to two words even if those files already exist.
+
+Use braces to avoid retyping shared prefixes/suffixes. It is pure text generation in the shell.`,
+    learning: [
+      'Braces generate words before globbing',
+      '{a,b} and {1..3} are the common forms',
+      'Braces are not filesystem globs',
+    ],
+    hint: 'touch {a,b}.txt',
+    par: 1,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [{ command: 'touch {a,b}.txt', note: 'Brace-expand two filenames' }],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/a.txt' },
+      { type: 'file_exists', value: '/home/learner/b.txt' },
+      { type: 'op_used', value: '{' },
+    ],
+  },
+  {
+    id: 'c10-read',
+    series: 'Control',
+    title: 'read a line',
+    objective: 'Capture stdin into a variable with read.',
+    brief: 'Put the first line of `notes/todo.txt` into variable `L`.',
+    teach: `\`read L\` reads one line from stdin into \`L\`. Pipe or redirect to feed it: \`read L < notes/todo.txt\` or \`head -1 notes/todo.txt | read L\` (the pipe form runs read in a subshell in real bash — prefer redirect).
+
+\`read\` is how shell scripts get input without being interactive. Multiple names split on IFS whitespace.
+
+Mental model: read is the stdin→variable adapter, the counterpart of echo for output.`,
+    learning: [
+      'read copies one stdin line into a variable',
+      'Redirect < file to feed read without a pipe',
+      'read is the input adapter; echo is the output adapter',
+    ],
+    hint: 'read L < notes/todo.txt then echo $L',
+    par: 2,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'read L < notes/todo.txt', note: 'Read first line into L' },
+      { command: 'echo $L', note: 'Show the captured line' },
+    ],
+    checks: [
+      { type: 'var_is', name: 'L', value: 'learn pipes' },
+      { type: 'last_stdout_contains', value: 'learn pipes' },
+      { type: 'cmd_used', value: 'read' },
+    ],
+  },
+
   // ——— Transfer capstones ———
   {
     id: 'x1-report',

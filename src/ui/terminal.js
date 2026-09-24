@@ -38,6 +38,8 @@ const BASE_COMMANDS = [
   'goal',
   'quiz',
   'review',
+  'predict',
+  'inventory',
   'undo',
   'reset',
 ];

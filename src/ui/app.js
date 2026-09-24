@@ -27,7 +27,16 @@ import {
   REPO_URL,
 } from './share.js';
 import { launchConfetti, playFanfare } from './confetti.js';
-import { quizForSeries, sampleReview, gradeQuiz } from '../level/assess.js';
+import {
+  quizForSeries,
+  sampleLeitner,
+  gradeQuizDetailed,
+  newLeitner,
+  conceptInventory,
+  scoreInventory,
+  PREDICTS,
+  gradePredict,
+} from '../level/assess.js';
 
 const state = {
   mode: /** @type {'sandbox' | 'level'} */ ('sandbox'),
@@ -42,6 +51,7 @@ const state = {
   hintIdx: 0,
   idleCommands: 0,
   _lastMet: 0,
+  leitner: loadLeitner(),
 };
 
 /** @type {any} */
@@ -65,6 +75,10 @@ export function init() {
   document.getElementById('btn-goal')?.addEventListener('click', () => showGoal(term));
   document.getElementById('btn-quiz')?.addEventListener('click', () => openQuiz(term, 'current'));
   document.getElementById('btn-review')?.addEventListener('click', () => openQuiz(term, 'review'));
+  document.getElementById('btn-predict')?.addEventListener('click', () => openQuiz(term, 'predict'));
+  document.getElementById('btn-inventory')?.addEventListener('click', () =>
+    openInventory(term, summarizeCurriculum(state.solved).solvedCount > 0 ? 'post' : 'pre')
+  );
   document.getElementById('btn-undo')?.addEventListener('click', () => handleLine('undo', term));
   document.getElementById('btn-reset')?.addEventListener('click', () => handleLine('reset', term));
   document.getElementById('btn-help')?.addEventListener('click', () => handleLine('help', term));
@@ -104,6 +118,8 @@ function layoutHTML() {
         <button type="button" id="btn-goal" class="btn">Goal</button>
         <button type="button" id="btn-quiz" class="btn">Quiz</button>
         <button type="button" id="btn-review" class="btn">Review</button>
+        <button type="button" id="btn-predict" class="btn">Predict</button>
+        <button type="button" id="btn-inventory" class="btn">Inventory</button>
         <button type="button" id="btn-undo" class="btn">Undo</button>
         <button type="button" id="btn-reset" class="btn">Reset</button>
         <button type="button" id="btn-help" class="btn">Help</button>
@@ -242,6 +258,12 @@ function handleLine(line, term) {
   if (trace.app === 'review') {
     if (line.trim()) term.pushHistory(line);
     openQuiz(term, 'review');
+    return;
+  }
+  if (trace.app === 'predict' || trace.app === 'inventory') {
+    if (line.trim()) term.pushHistory(line);
+    if (trace.app === 'predict') openQuiz(term, 'predict');
+    else openInventory(term, summarizeCurriculum(state.solved).solvedCount > 0 ? 'post' : 'pre');
     return;
   }
   if (trace.app === 'reset') {
@@ -721,12 +743,16 @@ function closeModal() {
  *
  * Args:
  *     term: terminal API
- *     mode: 'current' | 'review'
+ *     mode: 'current' | 'review' | 'predict'
  */
 function openQuiz(term, mode) {
+  if (mode === 'predict') {
+    openPredict(term);
+    return;
+  }
   const items =
     mode === 'review'
-      ? sampleReview(state.level?.series ?? null, solvedSeriesList(), 3)
+      ? sampleLeitner(state.leitner, 3, state.level?.series ?? null)
       : quizForSeries(state.level?.series ?? '*').slice(0, 3);
 
   if (!items.length) {
@@ -757,17 +783,35 @@ function openQuiz(term, mode) {
           )
           .join('')}
       </div>
+      <p class="par">Confidence: pick how sure you are after choosing</p>
+      <div class="share-row" role="group" aria-label="confidence">
+        <button type="button" class="btn conf" data-c="1">1 guess</button>
+        <button type="button" class="btn conf" data-c="2">2 sure</button>
+        <button type="button" class="btn conf" data-c="3">3 certain</button>
+      </div>
       <div class="share-status quiz-feedback" data-quiz-feedback hidden></div>
       <p class="par">Question ${idx + 1} / ${items.length} · score ${score}</p>
     `;
+    let confidence = 2;
+    body.querySelectorAll('.conf').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        confidence = Number(btn.getAttribute('data-c'));
+        body.querySelectorAll('.conf').forEach((b) => {
+          b.style.borderColor = b === btn ? 'var(--neon)' : 'var(--line)';
+        });
+      });
+    });
     body.querySelectorAll('.quiz-choice').forEach((btn) => {
       btn.addEventListener('click', () => {
         const pick = Number(btn.getAttribute('data-i'));
-        const g = gradeQuiz(item, pick);
+        const g = gradeQuizDetailed(state.leitner, item, pick, confidence);
+        saveLeitner(state.leitner);
         if (g.ok) score += 1;
         const fb = body.querySelector('[data-quiz-feedback]');
         fb.hidden = false;
-        fb.textContent = g.ok ? `Correct. ${g.why}` : `Not quite. ${g.why}`;
+        fb.textContent = g.ok
+          ? `Correct. ${g.why}`
+          : `Not quite. ${g.misconception}: ${g.coach}`;
         body.querySelectorAll('.quiz-choice').forEach((b) => {
           b.disabled = true;
           if (Number(b.getAttribute('data-i')) === item.answer) {
@@ -783,7 +827,7 @@ function openQuiz(term, mode) {
               <p class="hint">${
                 score === items.length
                   ? 'Solid understanding, not just commands.'
-                  : 'Re-read the teach panels, then try Review later.'
+                  : 'Weak items moved to Leitner box 1 — Review will resurface them.'
               }</p>
             `;
             const foot = document.createElement('div');
@@ -799,13 +843,155 @@ function openQuiz(term, mode) {
             foot.appendChild(close);
             body.appendChild(foot);
           }
-        }, 1200);
+        }, 1400);
       });
     });
   };
 
   render();
   modal.classList.remove('hidden');
+}
+
+/**
+ * Prediction tasks: say what will print before running.
+ *
+ * Args:
+ *     term: terminal API
+ */
+function openPredict(term) {
+  const task = PREDICTS[(Math.random() * PREDICTS.length) | 0];
+  const modal = document.getElementById('modal');
+  const body = document.getElementById('modal-body');
+  document.getElementById('modal-title').textContent = 'Predict, then run';
+  body.innerHTML = `
+    <p class="brief">${escapeHtml(task.prompt)}</p>
+    <p class="par"><code>${escapeHtml(task.command)}</code></p>
+    <div class="quiz-choices">
+      ${task.choices
+        .map(
+          (c, i) =>
+            `<button type="button" class="level-row quiz-choice" data-i="${i}">
+              <span class="level-row-title">${escapeHtml(c)}</span>
+            </button>`
+        )
+        .join('')}
+    </div>
+    <div class="share-status quiz-feedback" data-quiz-feedback hidden></div>
+  `;
+  body.querySelectorAll('.quiz-choice').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const pick = Number(btn.getAttribute('data-i'));
+      const g = gradePredict(task, pick);
+      const fb = body.querySelector('[data-quiz-feedback]');
+      fb.hidden = false;
+      fb.textContent = g.ok ? `Correct. ${g.why}` : `Not quite. ${g.why}`;
+      body.querySelectorAll('.quiz-choice').forEach((b) => {
+        b.disabled = true;
+        if (Number(b.getAttribute('data-i')) === task.answer) {
+          b.style.borderColor = 'var(--accent)';
+        }
+      });
+      setTimeout(() => {
+        closeModal();
+        term.print(`# verify: ${task.command}`, 'warn');
+        term.focus();
+      }, 1600);
+    });
+  });
+  modal.classList.remove('hidden');
+}
+
+/**
+ * Pre/post concept inventory.
+ *
+ * Args:
+ *     term: terminal API
+ *     variant: 'pre' | 'post'
+ */
+export function openInventory(term, variant) {
+  const items = conceptInventory(variant);
+  const answers = {};
+  const modal = document.getElementById('modal');
+  const body = document.getElementById('modal-body');
+  document.getElementById('modal-title').textContent =
+    variant === 'pre' ? 'Pre-test inventory' : 'Post-test inventory';
+  let idx = 0;
+
+  const finish = () => {
+    const sc = scoreInventory(items, answers);
+    const pct = Math.round((sc.score / sc.total) * 100);
+    body.innerHTML = `
+      <p class="brief">Inventory score: <strong>${sc.score}/${sc.total}</strong> (${pct}%).</p>
+      ${
+        sc.misses.length
+          ? `<div class="learning-box"><div class="next-title">Misconceptions to repair</div><ul>${sc.misses
+              .map((m) => `<li><code>${escapeHtml(m.misconception)}</code> — ${escapeHtml(m.coach)}</li>`)
+              .join('')}</ul></div>`
+          : '<p class="hint">No misconception flags. Strong conceptual model.</p>'
+      }
+    `;
+    const foot = document.createElement('div');
+    foot.className = 'win-actions';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'btn primary';
+    close.textContent = 'Back to terminal';
+    close.addEventListener('click', () => {
+      closeModal();
+      term.print(`Inventory ${variant}: ${sc.score}/${sc.total}`, sc.score === sc.total ? 'ok' : 'warn');
+      term.focus();
+    });
+    foot.appendChild(close);
+    body.appendChild(foot);
+  };
+
+  const render = () => {
+    if (idx >= items.length) {
+      finish();
+      return;
+    }
+    const item = items[idx];
+    body.innerHTML = `
+      <p class="brief">${escapeHtml(item.prompt)}</p>
+      <div class="quiz-choices">
+        ${item.choices
+          .map(
+            (c, i) =>
+              `<button type="button" class="level-row quiz-choice" data-i="${i}">
+                <span class="level-row-title">${escapeHtml(c)}</span>
+              </button>`
+          )
+          .join('')}
+      </div>
+      <p class="par">${idx + 1} / ${items.length}</p>
+    `;
+    body.querySelectorAll('.quiz-choice').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        answers[item.id] = Number(btn.getAttribute('data-i'));
+        idx += 1;
+        render();
+      });
+    });
+  };
+
+  render();
+  modal.classList.remove('hidden');
+}
+
+function loadLeitner() {
+  try {
+    return { ...newLeitner(), ...JSON.parse(localStorage.getItem('learnbash.leitner') ?? '{}') };
+  } catch {
+    return newLeitner();
+  }
+}
+
+function saveLeitner(state) {
+  try {
+    localStorage.setItem('learnbash.leitner', JSON.stringify(state));
+  } catch {
+    /* quota */
+  }
 }
 
 function solvedSeriesList() {

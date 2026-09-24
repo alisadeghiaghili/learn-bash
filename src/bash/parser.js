@@ -47,7 +47,7 @@ export function tokenize(line) {
       i += 2;
       continue;
     }
-    if (ch === '|' || ch === '>' || ch === '<' || ch === ';' || ch === '{' || ch === '}') {
+    if (ch === '|' || ch === '>' || ch === '<' || ch === ';' || ch === '(' || ch === ')') {
       // <( and >( are process substitution — keep as word characters via word scanner
       if ((ch === '<' || ch === '>') && line[i + 1] === '(') {
         let word = ch + '(';
@@ -69,12 +69,6 @@ export function tokenize(line) {
         tokens.push({ type: 'word', value: word });
         continue;
       }
-      // Bare { } are word-ish for function bodies when alone
-      if (ch === '{' || ch === '}') {
-        tokens.push({ type: 'word', value: ch });
-        i += 1;
-        continue;
-      }
       tokens.push({ type: 'op', value: ch });
       i += 1;
       continue;
@@ -83,7 +77,7 @@ export function tokenize(line) {
     let word = '';
     while (i < n) {
       const c = line[i];
-      if (c === ' ' || c === '\t' || c === '|' || c === '<' || c === '>' || c === ';' || c === '&') {
+      if (c === ' ' || c === '\t' || c === '|' || c === '<' || c === '>' || c === ';' || c === '&' || c === '(' || c === ')') {
         break;
       }
       if (c === '\\' && i + 1 < n) {

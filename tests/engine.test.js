@@ -176,6 +176,51 @@ test('t-process-sub', () => {
   assert.match(t.stdout, /hi/);
 });
 
+test('u-brace-case-read', () => {
+  console.log('run u-brace-case-read');
+  const shell = createSandboxShell();
+  shell.execute('touch {x,y}.txt');
+  assert.ok(shell.fs.getNode('/home/learner/x.txt'));
+  assert.ok(shell.fs.getNode('/home/learner/y.txt'));
+  shell.execute('X=yes');
+  shell.execute('case $X in yes) touch flag.txt ;; esac');
+  assert.ok(shell.fs.getNode('/home/learner/flag.txt'));
+  shell.execute('read L < notes/todo.txt');
+  assert.equal(shell.env.L, 'learn pipes');
+});
+
+test('v-assess-discrimination', async () => {
+  console.log('run v-assess-discrimination');
+  const {
+    NOVICE_MODEL,
+    scoreModel,
+    gradeQuizDetailed,
+    newLeitner,
+    QUIZ,
+    conceptInventory,
+    scoreInventory,
+  } = await import('../src/level/assess.js');
+  const expert = Object.fromEntries(QUIZ.map((q) => [q.id, q.answer]));
+  const exp = scoreModel(expert);
+  const nov = scoreModel(NOVICE_MODEL);
+  assert.equal(exp.rate, 1);
+  assert.ok(nov.rate < 0.5, `novice too high: ${nov.rate}`);
+  assert.ok(exp.score - nov.score >= QUIZ.length * 0.5);
+
+  const state = newLeitner();
+  const item = QUIZ[0];
+  gradeQuizDetailed(state, item, (item.answer + 1) % item.choices.length, 1);
+  assert.equal(state.box[item.id], 1);
+  assert.equal(state.lastMiss[item.id], item.misconception);
+  gradeQuizDetailed(state, item, item.answer, 3);
+  assert.ok(state.box[item.id] >= 2);
+
+  const inv = conceptInventory('post');
+  const answers = Object.fromEntries(inv.map((q) => [q.id, q.answer]));
+  const sc = scoreInventory(inv, answers);
+  assert.equal(sc.score, sc.total);
+});
+
 test('q-curriculum', () => {
   console.log('run q-curriculum');
   const solutions = {
@@ -207,6 +252,9 @@ test('q-curriculum', () => {
     'c5-bracket': ['NAME=ada', '[[ $NAME == ada ]] && touch match.txt'],
     'c6-fn': ['greet() { echo hello $1; }', 'greet world'],
     'c7-procsub': ['cat <(echo hi)'],
+    'c8-case': ['X=yes', 'case $X in yes) touch flag.txt ;; esac'],
+    'c9-brace': ['touch {a,b}.txt'],
+    'c10-read': ['read L < notes/todo.txt', 'echo $L'],
     'x1-report': ['mkdir -p out', 'echo ok > out/summary.txt'],
     'x2-pipeline-report': ['grep e notes/book.txt > hits.txt'],
     'x3-script': [

@@ -64,6 +64,29 @@ export function parseScript(text) {
       i += 1;
       return parseWhile(stops);
     }
+    if (t.type === 'word' && t.value === 'case') {
+      i += 1;
+      return parseCaseStmt(stops);
+    }
+    if (t.type === 'op' && t.value === '(') {
+      // subshell ( cmd )
+      i += 1;
+      const body = [];
+      while (i < tokens.length) {
+        const tok = tokens[i];
+        if (tok.type === 'op' && tok.value === ')') {
+          i += 1;
+          break;
+        }
+        if (tok.type === 'op' && tok.value === ';') {
+          i += 1;
+          continue;
+        }
+        body.push(tok);
+        i += 1;
+      }
+      return { type: 'simple', tokens: body, subshell: true };
+    }
 
     // simple command: consume words/ops until ; or keyword
     const parts = [];
@@ -171,6 +194,59 @@ export function parseScript(text) {
     return { type: 'while', cond: condTokens, body };
   }
 
+  function parseCaseStmt(stops) {
+    // case $word in pat) body ;; esac
+    const wordTokens = [];
+    while (i < tokens.length) {
+      const t = tokens[i];
+      if (t.type === 'word' && t.value === 'in') break;
+      wordTokens.push(t);
+      i += 1;
+    }
+    expectWord('in');
+    const arms = [];
+    let patterns = [];
+    let body = [];
+    while (i < tokens.length) {
+      const t = tokens[i];
+      if (t.type === 'word' && t.value === 'esac') {
+        i += 1;
+        break;
+      }
+      if (t.type === 'op' && t.value === ')') {
+        // finish pattern list, start body
+        i += 1;
+        body = [];
+        while (i < tokens.length) {
+          const tok = tokens[i];
+          if (tok.type === 'op' && tok.value === ';') {
+            // ;; as two ;
+            if (tokens[i + 1] && tokens[i + 1].type === 'op' && tokens[i + 1].value === ';') {
+              i += 2;
+              break;
+            }
+            i += 1;
+            continue;
+          }
+          if (tok.type === 'word' && tok.value === 'esac') break;
+          body.push(tok);
+          i += 1;
+        }
+        arms.push({ patterns: patterns.slice(), body: simpleToLine({ tokens: body }) });
+        patterns = [];
+        body = [];
+        continue;
+      }
+      if (t.type === 'word') patterns.push(t.value);
+      i += 1;
+    }
+    return {
+      type: 'case',
+      word: simpleToLine({ tokens: wordTokens }),
+      arms,
+    };
+  }
+
   function expectWord(word) {
     const t = tokens[i];
     if (!t || t.type !== 'word' || t.value !== word) {
@@ -210,7 +286,7 @@ function tokenizeKeywords(text) {
       i += 1;
       continue;
     }
-    if (ch === '|' || ch === '>' || ch === '<' || ch === ';' || ch === '&' || ch === '{' || ch === '}') {
+    if (ch === '|' || ch === '>' || ch === '<' || ch === ';' || ch === '&' || ch === '(' || ch === ')') {
       if ((ch === '<' || ch === '>') && text[i + 1] === '(') {
         let word = ch + '(';
         i += 2;
@@ -231,11 +307,6 @@ function tokenizeKeywords(text) {
         tokens.push({ type: 'word', value: word });
         continue;
       }
-      if (ch === '{' || ch === '}') {
-        tokens.push({ type: 'word', value: ch });
-        i += 1;
-        continue;
-      }
       if (ch === '|' && text[i + 1] === '|') {
         tokens.push({ type: 'op', value: '||' });
         i += 2;
@@ -251,7 +322,7 @@ function tokenizeKeywords(text) {
         i += 2;
         continue;
       }
-      tokens.push({ type: 'op', value: ch === '\n' ? ';' : ch });
+      tokens.push({ type: 'op', value: ch });
       i += 1;
       continue;
     }
@@ -273,7 +344,7 @@ function tokenizeKeywords(text) {
     let word = '';
     while (i < n) {
       const c = text[i];
-      if (c === ' ' || c === '\t' || c === '\n' || c === ';' || c === '|' || c === '&' || c === '<' || c === '>') break;
+      if (c === ' ' || c === '\t' || c === '\n' || c === ';' || c === '|' || c === '&' || c === '<' || c === '>' || c === '(' || c === ')') break;
       if (c === '\\' && i + 1 < n) {
         word += text[i + 1];
         i += 2;
@@ -496,10 +567,12 @@ async function runStatement(stmt, shell, options) {
 export function needsControlFlow(line) {
   // Match structural keywords only (start or after ; | &), never args like `echo done`.
   return (
-    /(^|[;&|]\s*)(if|for|while)\b/.test(line) ||
+    /(^|[;&|]\s*)(if|for|while|case)\b/.test(line) ||
     /;\s*then\b/.test(line) ||
     /;\s*do\b/.test(line) ||
     /(^|[;&|]\s*)fi\s*($|[;&|])/.test(line) ||
-    /(^|[;&|]\s*)done\s*($|[;&|])/.test(line)
+    /(^|[;&|]\s*)done\s*($|[;&|])/.test(line) ||
+    /(^|[;&|]\s*)esac\s*($|[;&|])/.test(line) ||
+    /^\s*\(/.test(line.trim())
   );
 }

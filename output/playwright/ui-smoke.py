@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "output" / "playwright"
 OUT.mkdir(parents=True, exist_ok=True)
-URL = "http://127.0.0.1:5173/"
+URL = "http://127.0.0.1:5187/"
 
 
 def main() -> None:
