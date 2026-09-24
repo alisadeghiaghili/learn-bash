@@ -82,6 +82,8 @@ const COMMANDS = {
   local: cmdLocal,
   return: cmdReturn,
   set: cmdSet,
+  jobs: cmdJobs,
+  wait: cmdWait,
   clear: cmdClear,
   true: () => result(),
   false: () => result('', '', 1),
@@ -462,6 +464,21 @@ function cmdSet(ctx, args) {
   if (args.includes('-u')) ctx.shell.optU = true;
   if (args.includes('+u')) ctx.shell.optU = false;
   return result();
+}
+
+function cmdJobs(ctx) {
+  const table = ctx.shell.jobs;
+  const out = [...table.jobs]
+    .map((j) => `[${j.id}]  ${j.status}  ${j.command}`)
+    .join('\n');
+  return result(out ? out + '\n' : '');
+}
+
+function cmdWait(ctx, args) {
+  const table = ctx.shell.jobs;
+  for (const j of table.jobs) j.status = 'done';
+  const last = table.jobs[table.jobs.length - 1];
+  return result('', '', last ? last.code : 0);
 }
 
 /**

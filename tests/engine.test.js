@@ -221,6 +221,18 @@ test('v-assess-discrimination', async () => {
   assert.equal(sc.score, sc.total);
 });
 
+test('w-jobs-arrays', () => {
+  console.log('run w-jobs-arrays');
+  const shell = createSandboxShell();
+  shell.execute('echo hi &');
+  const jobs = shell.execute('jobs');
+  assert.match(jobs.stdout, /echo hi/);
+  shell.execute('arr=(a b c)');
+  assert.deepEqual(shell.arrays.get('arr'), ['a', 'b', 'c']);
+  assert.match(shell.execute('echo ${arr[1]}').stdout, /b/);
+  assert.match(shell.execute('echo ${#arr[@]}').stdout, /3/);
+});
+
 test('q-curriculum', () => {
   console.log('run q-curriculum');
   const solutions = {

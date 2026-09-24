@@ -15,5 +15,25 @@ jobs:
           node-version: 20
       - name: Install
         run: npm ci || npm install
-      - name: Test
+      - name: Unit tests
         run: npm test
+
+  ui-smoke:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Playwright
+        run: |
+          npm i -D playwright
+          npx playwright install --with-deps chromium
+      - name: Serve and smoke
+        run: |
+          python3 -m http.server 5187 &
+          sleep 2
+          python3 output/playwright/ui-smoke.py
+        env:
+          PW_TEST: "1"

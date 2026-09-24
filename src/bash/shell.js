@@ -9,6 +9,12 @@ import { getCommand, result as cmdResult } from './commands.js';
 import { parseScript, runStatements, needsControlFlow, simpleToLine } from './control.js';
 import { parseFunctionDef, expandProcessSub } from './features.js';
 import { expandBraces, matchCase, parseArrayAssign } from './advanced.js';
+import {
+  createJobTable,
+  addJob,
+  expandArrayRefs,
+  parseArrayAppend,
+} from './jobs.js';
 
 /**
  * In-memory shell with filesystem, env, history, and undo.
@@ -53,9 +59,11 @@ export class Shell {
     this._tmpN = 0;
     /** @type {Map<string, string[]>} */
     this.arrays = new Map();
+    this.jobs = createJobTable();
     this.optE = false;
     this.optU = false;
     this._returned = false;
+    this.pid = 42;
   }
 
   /**
@@ -266,6 +274,15 @@ export class Shell {
       if (captureHistory) this.history.push(trimmed);
       this.arrays.set(arr.name, arr.items);
       this.env[arr.name] = arr.items.join(' ');
+      return { line: trimmed, stages: [], stdout: '', stderr: '', code: 0, clear: false };
+    }
+    const append = parseArrayAppend(trimmed);
+    if (append && !nested) {
+      this.undoStack.push(this.capture());
+      if (captureHistory) this.history.push(trimmed);
+      const prev = this.arrays.get(append.name) ?? [];
+      this.arrays.set(append.name, [...prev, ...append.items]);
+      this.env[append.name] = this.arrays.get(append.name).join(' ');
       return { line: trimmed, stages: [], stdout: '', stderr: '', code: 0, clear: false };
     }
 
@@ -486,6 +503,14 @@ export class Shell {
    * Run one line that may contain ; && || and pipes.
    */
   _runPipelineLine(line) {
+    // Background job: cmd &
+    let bg = false;
+    let workLine = line;
+    if (/&\s*$/.test(workLine) && !/&&\s*$/.test(workLine)) {
+      bg = true;
+      workLine = workLine.replace(/&\s*$/, '').trim();
+    }
+
     // Leading assignments: NAME=value (value may contain spaces inside $()).
     const assignRe = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
     const isAssignWord = (w) => {
@@ -496,7 +521,7 @@ export class Shell {
       return !/\s/.test(stripped);
     };
 
-    const { stages, connectors } = parseLine(line);
+    const { stages, connectors } = parseLine(workLine);
     if (stages.length === 1 && stages[0].args.length > 0 && stages[0].args.every(isAssignWord)) {
       for (const a of stages[0].args) {
         const m = a.match(assignRe);
@@ -582,7 +607,7 @@ export class Shell {
       pendingGate = gate;
     }
 
-    return {
+    const result = {
       line,
       stages: stageTraces,
       stdout: combinedOut,
@@ -591,6 +616,11 @@ export class Shell {
       clear,
       stop: false,
     };
+    if (bg) {
+      addJob(this.jobs, workLine, lastCode);
+      result.stdout += `[${this.jobs.nextId - 1}] ${this.pid + this.jobs.nextId}\n`;
+    }
+    return result;
   }
 
   /**
@@ -858,7 +888,27 @@ export class Shell {
             out += ch;
             continue;
           }
-          out += this.env[word.slice(i + 2, end)] ?? '';
+          const key = word.slice(i + 2, end);
+          // ${#name[@]} ${name[@]} ${name[i]}
+          const hashLen = key.match(/^#([A-Za-z_][A-Za-z0-9_]*)\[@\]$/);
+          if (hashLen) {
+            out += String(this.arrays.get(hashLen[1])?.length ?? 0);
+            i = end;
+            continue;
+          }
+          const at = key.match(/^([A-Za-z_][A-Za-z0-9_]*)\[@\]$/);
+          if (at) {
+            out += (this.arrays.get(at[1]) ?? []).join(' ');
+            i = end;
+            continue;
+          }
+          const idx = key.match(/^([A-Za-z_][A-Za-z0-9_]*)\[(\d+)\]$/);
+          if (idx) {
+            out += this.arrays.get(idx[1])?.[Number(idx[2])] ?? '';
+            i = end;
+            continue;
+          }
+          out += this.env[key] ?? '';
           i = end;
           continue;
         }
@@ -874,7 +924,7 @@ export class Shell {
       }
       out += ch;
     }
-    return out;
+    return expandArrayRefs(out, this.arrays, this.env);
   }
 
   _findClose(s, openIndex, open, close) {
