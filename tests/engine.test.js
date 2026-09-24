@@ -150,6 +150,32 @@ test('p-quiz', () => {
   assert.ok(review.every((r) => r.series !== 'Basics'));
 });
 
+test('r-functions', () => {
+  console.log('run r-functions');
+  const shell = createSandboxShell();
+  shell.execute('greet() { echo hello $1; }');
+  assert.ok(shell.functions.has('greet'));
+  const t = shell.execute('greet world');
+  assert.match(t.stdout, /hello world/);
+});
+
+test('s-double-bracket', () => {
+  console.log('run s-double-bracket');
+  const shell = createSandboxShell();
+  shell.execute('NAME=ada');
+  assert.equal(shell.execute('[[ $NAME == ada ]]').code, 0);
+  assert.equal(shell.execute('[[ $NAME == bob ]]').code, 1);
+  shell.execute('[[ $NAME == ada ]] && touch match.txt');
+  assert.ok(shell.fs.getNode('/home/learner/match.txt'));
+});
+
+test('t-process-sub', () => {
+  console.log('run t-process-sub');
+  const shell = createSandboxShell();
+  const t = shell.execute('cat <(echo hi)');
+  assert.match(t.stdout, /hi/);
+});
+
 test('q-curriculum', () => {
   console.log('run q-curriculum');
   const solutions = {
@@ -178,6 +204,9 @@ test('q-curriculum', () => {
     'c2-test': ['if [ -f notes/todo.txt ]; then touch present.txt; fi'],
     'c3-for': ['for x in p q r; do touch $x.txt; done'],
     'c4-arith': ['N=2', 'echo $((N * 4))'],
+    'c5-bracket': ['NAME=ada', '[[ $NAME == ada ]] && touch match.txt'],
+    'c6-fn': ['greet() { echo hello $1; }', 'greet world'],
+    'c7-procsub': ['cat <(echo hi)'],
     'x1-report': ['mkdir -p out', 'echo ok > out/summary.txt'],
     'x2-pipeline-report': ['grep e notes/book.txt > hits.txt'],
     'x3-script': [
@@ -185,6 +214,8 @@ test('q-curriculum', () => {
       'echo touch built.txt >> build.sh',
       'bash build.sh',
     ],
+    'chk-basics': ['whoami > who.txt', 'pwd >> who.txt'],
+    'chk-streams': ['grep e notes/book.txt | sort > e-lines.txt'],
   };
 
   for (const level of LEVELS) {

@@ -210,6 +210,51 @@ function tokenizeKeywords(text) {
       i += 1;
       continue;
     }
+    if (ch === '|' || ch === '>' || ch === '<' || ch === ';' || ch === '&' || ch === '{' || ch === '}') {
+      if ((ch === '<' || ch === '>') && text[i + 1] === '(') {
+        let word = ch + '(';
+        i += 2;
+        let depth = 1;
+        while (i < n && depth > 0) {
+          if (text[i] === '(') depth += 1;
+          else if (text[i] === ')') {
+            depth -= 1;
+            if (depth === 0) {
+              word += ')';
+              i += 1;
+              break;
+            }
+          }
+          word += text[i];
+          i += 1;
+        }
+        tokens.push({ type: 'word', value: word });
+        continue;
+      }
+      if (ch === '{' || ch === '}') {
+        tokens.push({ type: 'word', value: ch });
+        i += 1;
+        continue;
+      }
+      if (ch === '|' && text[i + 1] === '|') {
+        tokens.push({ type: 'op', value: '||' });
+        i += 2;
+        continue;
+      }
+      if (ch === '&' && text[i + 1] === '&') {
+        tokens.push({ type: 'op', value: '&&' });
+        i += 2;
+        continue;
+      }
+      if (ch === '>' && text[i + 1] === '>') {
+        tokens.push({ type: 'op', value: '>>' });
+        i += 2;
+        continue;
+      }
+      tokens.push({ type: 'op', value: ch === '\n' ? ';' : ch });
+      i += 1;
+      continue;
+    }
     if (ch === '|' && text[i + 1] === '|') {
       tokens.push({ type: 'op', value: '||' });
       i += 2;
@@ -223,11 +268,6 @@ function tokenizeKeywords(text) {
     if (ch === '>' && text[i + 1] === '>') {
       tokens.push({ type: 'op', value: '>>' });
       i += 2;
-      continue;
-    }
-    if (ch === ';' || ch === '|' || ch === '>' || ch === '<' || ch === '&' || ch === '\n') {
-      tokens.push({ type: 'op', value: ch === '\n' ? ';' : ch });
-      i += 1;
       continue;
     }
     let word = '';

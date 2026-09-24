@@ -37,7 +37,6 @@ export function renderPipeline(svg, stages, options = {}) {
   const height = BOX_H + PAD_Y * 2 + 36;
   svg.setAttribute('viewBox', `0 0 ${diagramW} ${height}`);
   svg.setAttribute('width', '100%');
-  svg.setAttribute('height', 'auto');
 
   stages.forEach((stage, i) => {
     const x = PAD_Y + i * (BOX_W + GAP);

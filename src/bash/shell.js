@@ -7,6 +7,7 @@ import { parseLine, expandWord } from './parser.js';
 import { expandArgs, expandFields, globToRegExp } from './expand.js';
 import { getCommand, result as cmdResult } from './commands.js';
 import { parseScript, runStatements, needsControlFlow, simpleToLine } from './control.js';
+import { parseFunctionDef, expandProcessSub } from './features.js';
 
 /**
  * In-memory shell with filesystem, env, history, and undo.
@@ -42,6 +43,37 @@ export class Shell {
     this.lastTrace = null;
     this._depth = 0;
     this.globToRegExp = globToRegExp;
+    /** @type {Map<string, { name: string, body: string }>} */
+    this.functions = new Map();
+    /** @type {string[]} */
+    this.positional = [];
+    /** @type {{ path: string, cmd: string }[]} */
+    this.pendingConsumers = [];
+    this._tmpN = 0;
+  }
+
+  /**
+   * Write text to a temp virtual file (process substitution).
+   *
+   * Args:
+   *     text: file content
+   * Returns:
+   *     absolute path
+   */
+  writeTemp(text) {
+    this._tmpN += 1;
+    const path = `/tmp/ps.${this._tmpN}`;
+    const { dir, base } = splitPath(path);
+    if (!this.fs.getNode('/tmp')) {
+      this.fs.attach('/', createDir('tmp'));
+    }
+    const existing = this.fs.getNode(path);
+    if (existing) {
+      existing.content = text;
+    } else {
+      this.fs.attach('/tmp', createFile(base, text));
+    }
+    return path;
   }
 
   /**
@@ -111,6 +143,10 @@ export class Shell {
       cwd: this.cwd,
       env: { ...this.env },
       history: [...this.history],
+      functions: new Map(
+        [...this.functions.entries()].map(([k, v]) => [k, { ...v }])
+      ),
+      positional: [...this.positional],
     };
   }
 
@@ -125,6 +161,10 @@ export class Shell {
     this.cwd = snap.cwd;
     this.env = { ...snap.env };
     this.history = [...snap.history];
+    this.functions = new Map(
+      [...(snap.functions ?? new Map()).entries()].map(([k, v]) => [k, { ...v }])
+    );
+    this.positional = [...(snap.positional ?? [])];
     this.env.PWD = this.cwd;
   }
 
@@ -211,6 +251,26 @@ export class Shell {
     const trimmed = line.trim();
     if (!trimmed) {
       return { line, stages: [], stdout: '', stderr: '', code: 0, clear: false };
+    }
+
+    // Function definition: name() { body }
+    const fnDef = parseFunctionDef(trimmed);
+    if (fnDef) {
+      if (!nested) {
+        this.undoStack.push(this.capture());
+        if (captureHistory) this.history.push(trimmed);
+      }
+      this.functions.set(fnDef.name, { name: fnDef.name, body: fnDef.body });
+      const trace = {
+        line: trimmed,
+        stages: [],
+        stdout: '',
+        stderr: '',
+        code: 0,
+        clear: false,
+      };
+      this.env['?'] = '0';
+      return trace;
     }
 
     if (!nested) {
@@ -571,9 +631,36 @@ export class Shell {
       env: this.env,
     };
 
-    const expanded = args.map((a) => this._expandWordFull(a, ctx)).flat();
+    const expanded = args
+      .map((a) => {
+        const withPs = expandProcessSub(a, this);
+        return this._expandWordFull(withPs, ctx);
+      })
+      .flat();
     const name = expanded[0];
     const rest = expanded.slice(1);
+
+    // Shell function call
+    if (name && this.functions.has(name)) {
+      const fn = this.functions.get(name);
+      const savedPos = [...this.positional];
+      this.positional = rest;
+      this.env['1'] = rest[0] ?? '';
+      this.env['2'] = rest[1] ?? '';
+      this.env['#'] = String(rest.length);
+      this.env['@'] = rest.join(' ');
+      const body = fn.body;
+      const result = this._runControlSync(body);
+      this.positional = savedPos;
+      this.env['1'] = savedPos[0] ?? '';
+      this.env['2'] = savedPos[1] ?? '';
+      this.env['#'] = String(savedPos.length);
+      this.env['@'] = savedPos.join(' ');
+      // Feed pending process-substitution consumers
+      this._flushConsumers(result);
+      return result;
+    }
+
     const fn = getCommand(name);
 
     if (!fn) {
@@ -582,7 +669,26 @@ export class Shell {
 
     const out = fn(ctx, rest, stdin, args);
     if (name === 'clear') return { ...out, clear: true };
+    this._flushConsumers(out);
     return out;
+  }
+
+  /**
+   * Run >(cmd) consumers after the stage writes to their temp files.
+   */
+  _flushConsumers(result) {
+    if (!this.pendingConsumers.length) return;
+    const consumers = this.pendingConsumers;
+    this.pendingConsumers = [];
+    for (const c of consumers) {
+      const node = this.fs.getNode(c.path);
+      const text = node?.content ?? result.stdout ?? '';
+      // Feed captured bytes into the consumer command via stdin
+      this._runPipelineLine(c.cmd); // ensure command exists
+      // Re-run with stdin: simulate by temporarily writing and using cat |
+      const tmpIn = this.writeTemp(text);
+      this._runPipelineLine(`cat ${tmpIn} | ${c.cmd}`);
+    }
   }
 
   /**
@@ -683,6 +789,22 @@ export class Shell {
       if (ch === '$') {
         if (word[i + 1] === '?' || word[i + 1] === '$') {
           out += this.env[word[i + 1]] ?? '';
+          i += 1;
+          continue;
+        }
+        if (/[0-9]/.test(word[i + 1] ?? '')) {
+          const n = word[i + 1];
+          out += this.positional[Number(n) - 1] ?? this.env[n] ?? '';
+          i += 1;
+          continue;
+        }
+        if (word[i + 1] === '@' || word[i + 1] === '*') {
+          out += this.env['@'] ?? this.positional.join(' ');
+          i += 1;
+          continue;
+        }
+        if (word[i + 1] === '#') {
+          out += String(this.positional.length);
           i += 1;
           continue;
         }

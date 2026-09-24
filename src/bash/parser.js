@@ -47,7 +47,34 @@ export function tokenize(line) {
       i += 2;
       continue;
     }
-    if (ch === '|' || ch === '>' || ch === '<' || ch === ';') {
+    if (ch === '|' || ch === '>' || ch === '<' || ch === ';' || ch === '{' || ch === '}') {
+      // <( and >( are process substitution — keep as word characters via word scanner
+      if ((ch === '<' || ch === '>') && line[i + 1] === '(') {
+        let word = ch + '(';
+        i += 2;
+        let depth = 1;
+        while (i < n && depth > 0) {
+          if (line[i] === '(') depth += 1;
+          else if (line[i] === ')') {
+            depth -= 1;
+            if (depth === 0) {
+              word += ')';
+              i += 1;
+              break;
+            }
+          }
+          word += line[i];
+          i += 1;
+        }
+        tokens.push({ type: 'word', value: word });
+        continue;
+      }
+      // Bare { } are word-ish for function bodies when alone
+      if (ch === '{' || ch === '}') {
+        tokens.push({ type: 'word', value: ch });
+        i += 1;
+        continue;
+      }
       tokens.push({ type: 'op', value: ch });
       i += 1;
       continue;

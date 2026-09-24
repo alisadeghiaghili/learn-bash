@@ -29,7 +29,6 @@ export function renderTree(svg, rootPath, fs, cwd, options = {}) {
   if (!root) {
     svg.setAttribute('viewBox', `0 0 ${width} 80`);
     svg.setAttribute('width', '100%');
-    svg.setAttribute('height', 'auto');
     addText(svg, PAD, 28, '(empty)', 'muted');
     return;
   }
@@ -40,7 +39,6 @@ export function renderTree(svg, rootPath, fs, cwd, options = {}) {
   const height = PAD * 2 + rows.length * ROW;
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.setAttribute('width', '100%');
-  svg.setAttribute('height', 'auto');
 
   rows.forEach((row, i) => {
     const y = PAD + i * ROW + ROW / 2;

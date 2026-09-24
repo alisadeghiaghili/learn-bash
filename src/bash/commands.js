@@ -11,6 +11,7 @@ import {
   resolvePath,
   splitPath,
 } from './fs.js';
+import { evalDoubleBracket, unwrapDoubleBracket } from './features.js';
 
 /**
  * @typedef {object} CmdResult
@@ -69,6 +70,7 @@ const COMMANDS = {
   env: cmdEnv,
   test: cmdTest,
   '[': cmdTest,
+  '[[': cmdDoubleBracket,
   source: cmdSource,
   '.': cmdSource,
   bash: cmdBashScript,
@@ -335,6 +337,21 @@ function cmdBashScript(ctx, args) {
 function cmdExit(ctx, args) {
   const code = args[0] !== undefined ? Number(args[0]) || 0 : Number(ctx.env['?'] || 0);
   return result('', '', code);
+}
+
+/**
+ * [[ ... ]] extended test with == != =~ and && ||.
+ *
+ * Args:
+ *     ctx: command context
+ *     args: expression words (may include [[ ]] tokens)
+ * Returns:
+ *     CmdResult code 0/1
+ */
+function cmdDoubleBracket(ctx, args) {
+  const inner = unwrapDoubleBracket(args);
+  const ok = evalDoubleBracket(inner, ctx);
+  return result('', '', ok ? 0 : 1);
 }
 
 /**
@@ -861,8 +878,9 @@ function cmdHelp() {
     'LearnBash built-ins:\n' +
       names.map((n) => `  ${n}`).join('\n') +
       '\n\nApp commands:\n  levels  goal  quiz  review  undo  reset  help\n' +
-      'Operators:  |  >  >>  <  ;  &&  ||\n' +
-      'Expansion:  $VAR  ${VAR}  $(cmd)  `cmd`  $((1+2))  * ? [a-z]  ~\n' +
-      'Control:  if [ test ]; then ...; fi   for i in ...; do ...; done   while ...; do ...; done\n'
+      'Operators:  |  >  >>  <  2>  ;  &&  ||\n' +
+      'Expansion:  $VAR  ${VAR}  $(cmd)  `cmd`  $((1+2))  * ? [a-z]  ~  <(cmd)\n' +
+      'Control:  if [[ ... ]]; then ...; fi   for i in ...; do ...; done   while ...; do ...; done\n' +
+      'Functions:  name() { echo hi $1; }   then call: name arg\n'
   );
 }

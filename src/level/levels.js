@@ -720,6 +720,91 @@ This is how scripts compute indexes, timeouts, and counters without spawning exp
     ],
   },
 
+  {
+    id: 'c5-bracket',
+    series: 'Control',
+    title: 'Extended test',
+    objective: 'Use [[ ]] with string equality.',
+    brief: 'If $NAME equals ada, create `match.txt`.',
+    teach: `\`[[ ... ]]\` is bash's extended test. Unlike \`[\`, it is a **keyword**, not a command: no word-splitting surprises, and it supports \`==\`, \`!=\`, \`=~\` (regex), and \`&&\`/\`||\` inside.
+
+\`[[ $NAME == ada ]] && touch match.txt\` is the idiomatic one-liner. Prefer \`[[\` in bash scripts; \`[\` is the POSIX-compatible form.
+
+The mental model is the same as \`if\`: the construct's exit status is 0 when the condition holds.`,
+    learning: [
+      '[[ is a keyword with safer expansion rules',
+      '== != =~ are the string operators',
+      'Same exit-status model as test/if',
+    ],
+    hint: 'NAME=ada then [[ $NAME == ada ]] && touch match.txt',
+    par: 2,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'NAME=ada', note: 'Set the value under test' },
+      { command: '[[ $NAME == ada ]] && touch match.txt', note: 'Guard with [[ ]]' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/match.txt' },
+      { type: 'op_used', value: '[[' },
+      { type: 'cmd_used', value: 'touch' },
+    ],
+  },
+  {
+    id: 'c6-fn',
+    series: 'Control',
+    title: 'Write a function',
+    objective: 'Define and call a shell function with a positional parameter.',
+    brief: 'Define `greet` so `greet world` prints `hello world`, then call it.',
+    teach: `A function is a named command written in shell itself: \`greet() { echo hello $1; }\`. Calling \`greet world\` sets \`$1\` to \`world\` for the body.
+
+\`$1\`…\`$9\` are positional parameters; \`$0\` is the function name (here). \`$@\` is all args. Functions are how scripts stop being one long scroll of copy-paste.
+
+Define once, call many times. That is the reuse unit of bash — not classes, not imports.`,
+    learning: [
+      'Functions are named shell snippets',
+      '$1 $2 $@ are positional parameters inside the body',
+      'Define once, call many — bash reuse',
+    ],
+    hint: "greet() { echo hello $1; } then greet world",
+    par: 2,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'greet() { echo hello $1; }', note: 'Define the function' },
+      { command: 'greet world', note: 'Call with a positional arg' },
+    ],
+    checks: [
+      { type: 'fn_defined', name: 'greet' },
+      { type: 'last_stdout_contains', value: 'hello world' },
+      { type: 'op_used', value: '()' },
+    ],
+  },
+  {
+    id: 'c7-procsub',
+    series: 'Control',
+    title: 'Process substitution',
+    objective: 'Feed command output as a file with <(...).',
+    brief: 'Print the contents of `<(echo hi)` using cat (output should be hi).',
+    teach: `\`<(command)\` runs the command and exposes its stdout as a **file path**. \`cat <(echo hi)\` prints \`hi\` because cat reads that temporary pipe/fd as if it were a file.
+
+Why it exists: many tools (diff, wc, comm) want file arguments, not stdin. Process substitution adapts a stream into the file API without a real temp file dance.
+
+\`>(command)\` is the mirror: the path is a sink that feeds a consumer. Focus on \`<(\` first — it is the common one.`,
+    learning: [
+      '<(cmd) turns stdout into a readable file path',
+      'Tools that want filenames can consume streams',
+      'Pipes handle stdin; process sub handles argv files',
+    ],
+    hint: 'cat <(echo hi)',
+    par: 1,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [{ command: 'cat <(echo hi)', note: 'Read a process as a file' }],
+    checks: [
+      { type: 'last_stdout_contains', value: 'hi' },
+      { type: 'op_used', value: '<(' },
+      { type: 'cmd_used', value: 'cat' },
+    ],
+  },
+
   // ——— Transfer capstones ———
   {
     id: 'x1-report',
@@ -809,15 +894,104 @@ This is how personal automation starts: stop retyping; save the sequence.`,
       { type: 'cmd_used', value: 'bash' },
     ],
   },
+
+  // ——— Series checkpoints (open-ended proof of understanding) ———
+  {
+    id: 'chk-basics',
+    series: 'Checkpoints',
+    title: 'Checkpoint: Basics',
+    objective: 'Prove cwd, listing, and variables without a spoon-fed script.',
+    brief: 'Create `who.txt` containing your username and the absolute home path (one line each is fine).',
+    teach: `**Checkpoint.** No full solution is handed to you. Use what the Basics series taught: where you are (\`pwd\`), who you are (\`whoami\`), and how text gets into a file.
+
+One valid shape: \`whoami > who.txt\` then \`pwd >> who.txt\`. Any sequence that leaves both facts in the file counts.
+
+If you are stuck, reread the Basics teach panels — the point is transfer, not speed.`,
+    learning: [
+      'Combine identity + path + redirect without a recipe',
+      'Transfer beats memorized one-liners',
+    ],
+    hints: [
+      'whoami prints the user name to stdout.',
+      'Redirect stdout into who.txt with >, then append pwd with >>.',
+    ],
+    transfer: 'Also add the output of `echo $HOME` as a third line.',
+    hint: 'whoami > who.txt then pwd >> who.txt',
+    par: 3,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'whoami > who.txt', note: 'Capture the user name' },
+      { command: 'pwd >> who.txt', note: 'Append the absolute path' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/who.txt' },
+      { type: 'file_contains', path: '/home/learner/who.txt', value: 'learner' },
+      { type: 'file_contains', path: '/home/learner/who.txt', value: '/home/learner' },
+      { type: 'cmd_used', value: 'whoami' },
+    ],
+  },
+  {
+    id: 'chk-streams',
+    series: 'Checkpoints',
+    title: 'Checkpoint: Streams',
+    objective: 'Prove pipes, filters, and redirects as a pipeline.',
+    brief: 'Write to `e-lines.txt` every line of `notes/book.txt` that contains `e`, sorted.',
+    teach: `**Checkpoint.** You need a producer, a filter, a transform, and a sink. Order matters: sort after grep (or the result is not "sorted matches").
+
+One valid shape: \`grep e notes/book.txt | sort > e-lines.txt\`. The file must contain only matching lines and they must be sorted.
+
+Measure with \`cat e-lines.txt\` and \`wc -l e-lines.txt\` before you call it done.`,
+    learning: [
+      'Chain produce → filter → transform → store',
+      'Sort position is semantic',
+      'Always verify the artifact you claim to produce',
+    ],
+    hints: [
+      'grep e notes/book.txt prints only matching lines.',
+      'Pipe into sort, then redirect with > into e-lines.txt.',
+    ],
+    transfer: 'Also write the match count to e-count.txt with wc.',
+    hint: 'grep e notes/book.txt | sort > e-lines.txt',
+    par: 1,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'grep e notes/book.txt | sort > e-lines.txt', note: 'Filter, sort, store' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/e-lines.txt' },
+      { type: 'file_contains', path: '/home/learner/e-lines.txt', value: 'files hold bytes' },
+      { type: 'file_contains', path: '/home/learner/e-lines.txt', value: 'streams carry data' },
+      { type: 'op_used', value: '|' },
+      { type: 'cmd_used', value: 'grep' },
+      { type: 'cmd_used', value: 'sort' },
+    ],
+  },
 ];
 
 export function levelSeries() {
   const map = new Map();
   for (const level of LEVELS) {
-    if (!map.has(level.series)) map.set(level.series, []);
-    map.get(level.series).push(level);
+    const key = level.series === 'Checkpoints' ? 'Checkpoints' : level.series;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(level);
   }
   return [...map.entries()].map(([series, levels]) => ({ series, levels }));
+}
+
+/**
+ * Whether a series has all non-checkpoint levels solved.
+ *
+ * Args:
+ *     series: series name
+ *     progress: solved map
+ * Returns:
+ *     boolean
+ */
+export function seriesReadyForCheckpoint(series, progress) {
+  const levels = LEVELS.filter(
+    (l) => l.series === series && l.series !== 'Checkpoints'
+  );
+  return levels.length > 0 && levels.every((l) => progress[l.id]?.solved);
 }
 
 export function checkLevel(level, shell, traces) {
@@ -833,6 +1007,8 @@ function runCheck(check, shell, traces) {
   switch (check.type) {
     case 'cwd_is':
       return shell.cwd === check.value;
+    case 'fn_defined':
+      return shell.functions?.has(check.name) ?? false;
     case 'file_exists': {
       const n = shell.fs.getNode(check.value);
       return !!n && n.type === 'file';
@@ -868,6 +1044,8 @@ function describeCheck(check) {
   switch (check.type) {
     case 'cwd_is':
       return `current directory must be ${check.value}`;
+    case 'fn_defined':
+      return `function ${check.name} must be defined`;
     case 'file_exists':
       return `file ${check.value} must exist`;
     case 'dir_exists':

@@ -39,6 +39,9 @@ const state = {
   /** @type {Set<number>} */
   doneSteps: new Set(),
   offered: false,
+  hintIdx: 0,
+  idleCommands: 0,
+  _lastMet: 0,
 };
 
 /** @type {any} */
@@ -187,6 +190,8 @@ function startLevel(id, term) {
   state.traces = [];
   state.doneSteps = new Set();
   state.offered = false;
+  state.hintIdx = 0;
+  state.idleCommands = 0;
   setHeader(level.series, level.title);
   setGoal(level.brief);
   document.getElementById('golf').textContent = `0 / par ${level.par}`;
@@ -201,6 +206,7 @@ function startLevel(id, term) {
   term.print(`Level: ${level.title}`);
   term.print(level.objective);
   term.print(level.brief);
+  if (level.transfer) term.print(`Transfer: ${level.transfer}`);
   term.print(`Hint: ${level.hint}`);
   updateChecks(level.checks.map((c) => ({ ...c, ok: false })));
   showLevelDialog(level);
@@ -267,6 +273,15 @@ function handleLine(line, term) {
     const g = document.getElementById('golf');
     if (g) g.textContent = `${golfScore(state.traces)} / par ${state.level.par}`;
 
+    // Progressive hints: reveal after commands without new progress
+    const met = checks.filter((c) => c.ok).length;
+    if (line.trim() && line.trim() !== 'undo') {
+      if (met === state._lastMet) state.idleCommands += 1;
+      else state.idleCommands = 0;
+      state._lastMet = met;
+      maybeRevealHint(term);
+    }
+
     if (line.trim() !== 'undo' && !state.level._solved) {
       const { ok } = checkLevel(state.level, state.shell, state.traces);
       if (ok) onLevelSolved(term);
@@ -280,6 +295,23 @@ function handleLine(line, term) {
 function runCheckQuick(check) {
   const fake = { checks: [check] };
   return checkLevel(fake, state.shell, state.traces).ok;
+}
+
+/**
+ * Reveal the next structured hint after idle thrashing.
+ *
+ * Args:
+ *     term: terminal API
+ */
+function maybeRevealHint(term) {
+  const hints = state.level?.hints ?? [];
+  if (!hints.length) return;
+  if (state.idleCommands < 2) return;
+  if (state.hintIdx >= hints.length) return;
+  const hint = hints[state.hintIdx];
+  state.hintIdx += 1;
+  state.idleCommands = 0;
+  term.print(`Hint ${state.hintIdx}/${hints.length}: ${hint}`, 'warn');
 }
 
 function doReset(term) {
@@ -631,9 +663,20 @@ function openLevels() {
       const items = g.levels
         .map((l) => {
           const done = state.solved[l.id];
-          const mark = done?.solved ? `✓ ${done.bestCommands}/${l.par}` : '';
-          return `<button type="button" class="level-row" data-id="${l.id}">
-            <span class="level-row-title">${escapeHtml(l.title)}</span>
+          const isChk = l.series === 'Checkpoints' || l.id.startsWith('chk-');
+          let locked = false;
+          if (isChk && !done?.solved) {
+            const base = l.id.replace(/^chk-/, '');
+            const map = { basics: 'Basics', streams: 'Streams' };
+            const series = map[base] ?? l.series;
+            const peers = LEVELS.filter(
+              (x) => x.series === series && !x.id.startsWith('chk-')
+            );
+            locked = peers.length > 0 && !peers.every((p) => state.solved[p.id]?.solved);
+          }
+          const mark = done?.solved ? `✓ ${done.bestCommands}/${l.par}` : locked ? 'locked' : '';
+          return `<button type="button" class="level-row" data-id="${l.id}" ${locked ? 'disabled' : ''}>
+            <span class="level-row-title">${escapeHtml(l.title)}${locked ? ' 🔒' : ''}</span>
             <span class="level-row-meta">${escapeHtml(g.series)} · par ${l.par} ${mark}</span>
           </button>`;
         })
@@ -661,8 +704,9 @@ function showLevelDialog(level) {
     <div class="teach-box">${escapeHtml(level.teach)
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/`([^`]+)`/g, '<code>$1</code>')}</div>
+    ${level.transfer ? `<p class="hint">Transfer: ${escapeHtml(level.transfer)}</p>` : ''}
     <p class="hint">Hint: ${escapeHtml(level.hint)}</p>
-    <p class="par">Par: ${level.par} command(s)</p>
+    <p class="par">Par: ${level.par} command(s)${level.hints?.length ? ` · ${level.hints.length} deeper hints if you get stuck` : ''}</p>
   `;
   modal.classList.remove('hidden');
   getTerm()?.focus?.();
