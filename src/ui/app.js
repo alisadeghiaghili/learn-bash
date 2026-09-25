@@ -46,6 +46,15 @@ import {
   saveStudy,
   retentionDue,
 } from '../level/study.js';
+import {
+  ui as t,
+  LOCALES,
+  getLocale,
+  setLocale,
+  initLocale,
+  localizeLevel,
+  getDir,
+} from '../i18n/index.js';
 
 const state = {
   mode: /** @type {'sandbox' | 'level'} */ ('sandbox'),
@@ -72,6 +81,7 @@ let termRef = null;
  * Boot the app once DOM is ready.
  */
 export function init() {
+  initLocale();
   const app = document.getElementById('app');
   if (!app) throw new Error('#app missing');
 
@@ -81,30 +91,81 @@ export function init() {
     onSubmit: (line) => handleLine(line, term),
   });
   termRef = term;
+  wireToolbar(term);
 
-  document.getElementById('btn-levels')?.addEventListener('click', () => openLevels());
-  document.getElementById('btn-goal')?.addEventListener('click', () => showGoal(term));
-  document.getElementById('btn-quiz')?.addEventListener('click', () => openQuiz(term, 'current'));
-  document.getElementById('btn-review')?.addEventListener('click', () => openQuiz(term, 'review'));
-  document.getElementById('btn-predict')?.addEventListener('click', () => openQuiz(term, 'predict'));
-  document.getElementById('btn-inventory')?.addEventListener('click', () =>
-    openInventory(term, summarizeCurriculum(state.solved).solvedCount > 0 ? 'post' : 'pre')
-  );
-  document.getElementById('btn-study-export')?.addEventListener('click', () => {
-    const pkg = exportStudy(state.study);
-    const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `learnbash-study-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    term.print(`Exported study package n=${pkg.n} (anonymous pids only).`);
-    term.focus();
+  enterSandbox(term, true);
+  const summary = summarizeCurriculum(state.solved);
+  term.print(t().welcome);
+  if (summary.solvedCount > 0) {
+    term.print(resumeLine(summary));
+  }
+  term.focus();
+}
+
+/**
+ * Bind toolbar / nav / language controls.
+ *
+ * Args:
+ *     term: terminal API
+ */
+function wireToolbar(term) {
+  const root = document.getElementById('app');
+  root.querySelectorAll('[data-action]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const action = btn.getAttribute('data-action');
+      if (action === 'nav-toggle') {
+        toggleNav();
+        return;
+      }
+      if (action === 'lang-toggle') {
+        toggleLang();
+        return;
+      }
+      closeNav();
+      closeLang();
+      if (action === 'levels') openLevels();
+      if (action === 'goal') showGoal(term);
+      if (action === 'quiz') openQuiz(term, 'current');
+      if (action === 'review') openQuiz(term, 'review');
+      if (action === 'predict') openQuiz(term, 'predict');
+      if (action === 'inventory') {
+        openInventory(
+          term,
+          summarizeCurriculum(state.solved).solvedCount > 0 ? 'post' : 'pre'
+        );
+      }
+      if (action === 'export-study') {
+        const pkg = exportStudy(state.study);
+        const blob = new Blob([JSON.stringify(pkg, null, 2)], {
+          type: 'application/json',
+        });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `learnbash-study-${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        term.print(
+          `${t().exportedStudy} n=${pkg.n} ${t().anonymousOnly}`
+        );
+      }
+      if (action === 'undo') handleLine('undo', term);
+      if (action === 'reset') handleLine('reset', term);
+      if (action === 'sandbox') enterSandbox(term);
+      if (action === 'help') handleLine('help', term);
+      term.focus();
+    });
   });
-  document.getElementById('btn-undo')?.addEventListener('click', () => handleLine('undo', term));
-  document.getElementById('btn-reset')?.addEventListener('click', () => handleLine('reset', term));
-  document.getElementById('btn-help')?.addEventListener('click', () => handleLine('help', term));
-  document.getElementById('btn-sandbox')?.addEventListener('click', () => enterSandbox(term));
+  root.querySelectorAll('[data-lang]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const loc = btn.getAttribute('data-lang');
+      if (!loc || loc === getLocale()) {
+        closeLang();
+        return;
+      }
+      setLocale(loc);
+      remountAfterLocale(term);
+    });
+  });
   document.getElementById('modal-close')?.addEventListener('click', () => {
     closeModal();
     term.focus();
@@ -115,65 +176,149 @@ export function init() {
       term.focus();
     }
   });
+}
 
-  enterSandbox(term, true);
-  const summary = summarizeCurriculum(state.solved);
-  term.print('LearnBash — type `help` for commands, `levels` to learn.');
-  if (summary.solvedCount > 0) {
-    term.print(resumeLine(summary));
+function toggleNav() {
+  const drawer = document.getElementById('nav-drawer');
+  const btn = document.querySelector('[data-action="nav-toggle"]');
+  if (!drawer || !btn) return;
+  const open = drawer.classList.toggle('is-open');
+  drawer.hidden = !open;
+  btn.setAttribute('aria-expanded', String(open));
+  if (open) closeLang();
+}
+
+function closeNav() {
+  const drawer = document.getElementById('nav-drawer');
+  const btn = document.querySelector('[data-action="nav-toggle"]');
+  if (!drawer || !btn) return;
+  drawer.classList.remove('is-open');
+  drawer.hidden = true;
+  btn.setAttribute('aria-expanded', 'false');
+}
+
+function toggleLang() {
+  const menu = document.getElementById('lang-dropdown');
+  const btn = document.querySelector('[data-action="lang-toggle"]');
+  if (!menu || !btn) return;
+  const open = menu.classList.toggle('is-open');
+  menu.hidden = !open;
+  btn.setAttribute('aria-expanded', String(open));
+  if (open) closeNav();
+}
+
+function closeLang() {
+  const menu = document.getElementById('lang-dropdown');
+  const btn = document.querySelector('[data-action="lang-toggle"]');
+  if (!menu || !btn) return;
+  menu.classList.remove('is-open');
+  menu.hidden = true;
+  btn.setAttribute('aria-expanded', 'false');
+}
+
+/**
+ * Rebuild chrome after a language switch; keep mode/level.
+ */
+function remountAfterLocale(term) {
+  const levelId = state.level?.id ?? null;
+  const wasLevel = state.mode === 'level';
+  const traces = state.traces;
+  const doneSteps = state.doneSteps;
+  const app = document.getElementById('app');
+  app.innerHTML = layoutHTML();
+  const newTerm = createTerminal(document.getElementById('terminal-host'), {
+    onSubmit: (line) => handleLine(line, newTerm),
+  });
+  termRef = newTerm;
+  wireToolbar(newTerm);
+  if (wasLevel && levelId) {
+    const raw = LEVELS.find((l) => l.id === levelId);
+    if (raw) {
+      state.level = localizeLevel(raw);
+      state.mode = 'level';
+      state.traces = traces;
+      state.doneSteps = doneSteps;
+      setHeader(state.level.series, state.level.title);
+      setGoal(state.level.brief);
+      renderLesson(state.level);
+      renderChecklist(solutionProgress(state.level, state.doneSteps, state.traces));
+      renderAll();
+      newTerm.setPrompt(state.shell.prompt());
+      newTerm.print(state.level.brief);
+    }
+  } else {
+    enterSandbox(newTerm, true);
+    newTerm.print(t().sandboxReady);
   }
-  term.focus();
+  newTerm.focus();
 }
 
 function layoutHTML() {
+  const u = t();
+  const current = getLocale();
+  const langItems = LOCALES.map(
+    (loc) =>
+      `<button type="button" class="lang-option${current === loc ? ' on' : ''}" data-lang="${loc}" role="menuitem" aria-checked="${current === loc}">${loc.toUpperCase()}</button>`
+  ).join('');
   return `
-    <header class="topbar">
-      <div class="brand">LearnBash</div>
-      <div class="level-meta">
-        <span id="mode-label" class="mode-label">Sandbox</span>
-        <span id="level-title" class="level-title">Free exploration</span>
-      </div>
-      <div class="actions">
-        <span id="golf" class="golf" title="commands used vs par"></span>
-        <button type="button" id="btn-sandbox" class="btn">Sandbox</button>
-        <button type="button" id="btn-levels" class="btn">Levels</button>
-        <button type="button" id="btn-goal" class="btn">Goal</button>
-        <button type="button" id="btn-quiz" class="btn">Quiz</button>
-        <button type="button" id="btn-review" class="btn">Review</button>
-        <button type="button" id="btn-predict" class="btn">Predict</button>
-        <button type="button" id="btn-inventory" class="btn">Inventory</button>
-        <button type="button" id="btn-study-export" class="btn">Export study</button>
-        <button type="button" id="btn-undo" class="btn">Undo</button>
-        <button type="button" id="btn-reset" class="btn">Reset</button>
-        <button type="button" id="btn-help" class="btn">Help</button>
+    <header class="toolbar">
+      <div class="brand">Learn<span>Bash</span></div>
+      <div class="level-title" id="level-title"></div>
+      <div class="toolbar-actions">
+        <div class="lang-menu">
+          <button type="button" class="lang-btn" data-action="lang-toggle" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeHtml(u.language)}">
+            <span data-lang-label>${current.toUpperCase()}</span>
+            <span class="lang-caret" aria-hidden="true"></span>
+          </button>
+          <div class="lang-dropdown" id="lang-dropdown" role="menu" hidden>
+            ${langItems}
+          </div>
+        </div>
+        <button type="button" class="nav-toggle" data-action="nav-toggle" aria-label="${escapeHtml(u.menuLabel)}" aria-expanded="false" aria-controls="nav-drawer">
+          <span class="nav-bars" aria-hidden="true"></span>
+        </button>
+        <div class="nav-drawer" id="nav-drawer" hidden>
+          <button type="button" data-action="levels">${escapeHtml(u.levels)}</button>
+          <button type="button" data-action="goal">${escapeHtml(u.goal)}</button>
+          <button type="button" data-action="quiz">${escapeHtml(u.quiz)}</button>
+          <button type="button" data-action="review">${escapeHtml(u.review)}</button>
+          <button type="button" data-action="predict">${escapeHtml(u.predict)}</button>
+          <button type="button" data-action="inventory">${escapeHtml(u.inventory)}</button>
+          <button type="button" data-action="export-study">${escapeHtml(u.exportStudy)}</button>
+          <button type="button" data-action="undo">${escapeHtml(u.undo)}</button>
+          <button type="button" data-action="reset">${escapeHtml(u.reset)}</button>
+          <button type="button" data-action="sandbox" class="ghost">${escapeHtml(u.sandboxBtn)}</button>
+          <button type="button" class="help-btn" data-action="help" title="${escapeHtml(u.help)}" aria-label="${escapeHtml(u.help)}">?</button>
+          <a class="tb-link gh" href="https://github.com/alisadeghiaghili/learn-bash" target="_blank" rel="noopener noreferrer" title="${escapeHtml(u.githubTitle)}" aria-label="GitHub"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true" width="18" height="18"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        </div>
       </div>
     </header>
     <main class="split">
       <section class="pane terminal-pane">
-        <div class="pane-label">Terminal</div>
+        <div class="pane-label">${escapeHtml(u.terminal)}</div>
         <div id="terminal-host"></div>
         <div id="tab-cycle" class="tab-cycle" hidden></div>
       </section>
       <section class="pane viz-pane">
         <div id="lesson-panel" class="lesson-panel"></div>
-        <div class="pane-label">Checklist</div>
+        <div class="pane-label">${escapeHtml(u.checklist)}</div>
         <div id="checklist" class="checklist"></div>
-        <div class="pane-label">Filesystem</div>
-        <svg id="tree-svg" class="viz-svg" role="img" aria-label="Filesystem tree"></svg>
-        <div class="pane-label">Pipeline</div>
-        <svg id="pipe-svg" class="viz-svg pipe-svg" role="img" aria-label="Pipeline dataflow"></svg>
+        <div class="pane-label">${escapeHtml(u.filesystem)}</div>
+        <svg id="tree-svg" class="viz-svg" role="img" aria-label="${escapeHtml(u.filesystem)}"></svg>
+        <div class="pane-label">${escapeHtml(u.pipeline)}</div>
+        <svg id="pipe-svg" class="viz-svg pipe-svg" role="img" aria-label="${escapeHtml(u.pipeline)}"></svg>
         <div id="checks" class="checks" aria-live="polite"></div>
       </section>
     </main>
     <footer class="goalbar">
-      <span class="goal-label">Goal</span>
-      <span id="goal-text">Explore the shell. Type help for the command list.</span>
+      <span class="goal-label">${escapeHtml(u.goalLabel)}</span>
+      <span id="goal-text">${escapeHtml(u.goalDefault)}</span>
     </footer>
     <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
       <div class="modal-card">
         <div class="modal-head">
-          <h2 id="modal-title">Levels</h2>
-          <button type="button" id="modal-close" class="btn">Close</button>
+          <h2 id="modal-title">${escapeHtml(u.levels)}</h2>
+          <button type="button" id="modal-close" class="btn ghost">${escapeHtml(u.close)}</button>
         </div>
         <div id="modal-body" class="modal-body"></div>
       </div>
@@ -196,15 +341,14 @@ function enterSandbox(term, silent = false) {
   state.traces = [];
   state.doneSteps = new Set();
   state.offered = false;
-  setHeader('Sandbox', 'Free exploration');
-  setGoal('Explore the shell. Type help for the command list.');
-  document.getElementById('golf').textContent = '';
+  setHeader(t().modeSandbox, t().freeExplore);
+  setGoal(t().goalDefault);
   renderLesson(null);
   renderChecklist([]);
   renderAll();
   term.setPrompt(state.shell.prompt());
   term.setExtraCompletions([]);
-  if (!silent) term.print('Sandbox ready. `levels` opens lessons.');
+  if (!silent) term.print(t().sandboxReady);
   updateChecks([]);
   term.focus();
 }
@@ -220,7 +364,7 @@ function startLevel(id, term) {
   const level = LEVELS.find((l) => l.id === id);
   if (!level) return;
   state.mode = 'level';
-  state.level = level;
+  state.level = localizeLevel(level);
   state.shell = new Shell(buildFS(level.seed.tree), {
     cwd: level.seed.cwd,
     home: level.seed.home,
@@ -231,9 +375,13 @@ function startLevel(id, term) {
   state.offered = false;
   state.hintIdx = 0;
   state.idleCommands = 0;
-  setHeader(level.series, level.title);
-  setGoal(level.brief);
-  document.getElementById('golf').textContent = `0 / par ${level.par}`;
+  setHeader(state.level.series, state.level.title);
+  setGoal(state.level.brief);
+  document.getElementById('golf')?.remove();
+  const meta = document.getElementById('level-title');
+  if (meta) {
+    meta.textContent = `${state.level.series} · ${state.level.title} · ${t().parShort} ${state.level.par}`;
+  }
   renderLesson(level);
   renderChecklist(
     solutionProgress(level, state.doneSteps, state.traces)
@@ -562,8 +710,8 @@ function renderAll(lastTrace = null) {
 }
 
 function setHeader(mode, title) {
-  document.getElementById('mode-label').textContent = mode;
-  document.getElementById('level-title').textContent = title;
+  const el = document.getElementById('level-title');
+  if (el) el.textContent = `${mode} · ${title}`;
 }
 
 function setGoal(text) {

@@ -15,10 +15,11 @@ def main() -> None:
         page = browser.new_page(viewport={"width": 1280, "height": 800})
         page.goto(URL, wait_until="networkidle", timeout=30000)
 
-        # App shell rendered
-        assert page.locator(".brand").inner_text() == "LearnBash"
+        # App shell rendered (learn-dvc style toolbar)
+        assert page.locator(".brand").inner_text().startswith("LearnBash")
         assert page.locator("#tree-svg").count() == 1
         assert page.locator("#pipe-svg").count() == 1
+        assert page.locator(".lang-btn").count() == 1
 
         # Type a command
         inp = page.locator(".terminal-input")
@@ -43,7 +44,7 @@ def main() -> None:
         assert val.startswith("echo") and "hello" not in val, val
 
         # Open levels and start one
-        page.locator("#btn-levels").click()
+        page.locator('[data-action="levels"]').click()
         page.wait_for_timeout(150)
         assert page.locator(".level-row").count() > 5
         page.locator(".level-row", has_text="Where am I?").first.click()
@@ -66,7 +67,7 @@ def main() -> None:
 
         # Neon current step exists on a later level checklist
         page.locator("#modal-close").click()
-        page.locator("#btn-levels").click()
+        page.locator('[data-action="levels"]').click()
         page.locator(".level-row", has_text="First pipe").first.click()
         page.wait_for_timeout(200)
         if page.locator("#modal:not(.hidden)").count():
@@ -75,10 +76,10 @@ def main() -> None:
         assert page.locator(".goal-list li.current").count() >= 1
         page.screenshot(path=str(OUT / "learnbash-level.png"), full_page=True)
 
-        # Sandbox reset
-        page.locator("#btn-sandbox").click()
+        # Sandbox reset via nav drawer
+        page.locator('[data-action="sandbox"]').click()
         page.wait_for_timeout(150)
-        assert "sandbox" in page.locator("#mode-label").inner_text().lower()
+        assert "sandbox" in page.locator("#level-title").inner_text().lower() or "free" in page.locator("#level-title").inner_text().lower()
 
         page.screenshot(path=str(OUT / "learnbash-sandbox.png"), full_page=True)
         browser.close()

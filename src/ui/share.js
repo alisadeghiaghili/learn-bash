@@ -2,36 +2,51 @@
  * Social share targets built from curriculum progress.
  */
 
+import { ui as t } from '../i18n/index.js';
+
 export const LIVE_URL = 'https://alisadeghiaghili.github.io/learn-bash/';
 export const SHARE_URL = 'https://alisadeghiaghili.github.io/learn-bash/';
 export const REPO_URL = 'https://github.com/alisadeghiaghili/learn-bash';
 
-export const COPY = {
-  titleLearnBash: 'LearnBash',
-  shareTitle: 'Share what you learned (includes your curriculum)',
-  shareGroupLabel: 'Share on social networks',
-  linkedin: 'LinkedIn',
-  xTwitter: 'X / Twitter',
-  facebook: 'Facebook',
-  copyPost: 'Copy post',
-  shareOpened: 'Share window opened. Paste the copied post if the box is empty.',
-  shareCopied:
-    'Post copied. Paste it into the share box (LinkedIn/Facebook block auto-filled text).',
-  copyOk: 'Post copied.',
-  copyFail: 'Could not copy — select the share text manually.',
-  shareLinkedInHead:
-    'I am really happy — I just sharpened my bash skills on LearnBash!',
-  shareStarting: 'Starting my bash journey.',
-  shareLatestWin: (name, id) => `Latest win: ${name} (${id})`,
-  shareCommands: (n, par) =>
-    ` — ${n} command${n === 1 ? '' : 's'} (ideal ${par})`,
-  shareLearnedSoFar: 'What I have learned so far:',
-  shareProgress: (solved, total) => `Progress: ${solved}/${total} levels.`,
-  shareCta: 'If you live in a terminal, try it — free, no login:',
-  shareXHead: (solved, total) =>
-    `Learning bash on LearnBash — ${solved}/${total} levels cleared.`,
-  shareXFirst: 'Hands-on sandbox.',
-};
+/**
+ * Locale-aware share copy (mirrors learn-dvc).
+ *
+ * Returns:
+ *     object of share strings
+ */
+export function copy() {
+  const u = t();
+  return {
+    titleLearnBash: u.titleLearnBash,
+    shareTitle: u.shareTitle,
+    shareGroupLabel: u.shareGroupLabel,
+    linkedin: u.linkedin,
+    xTwitter: u.xTwitter,
+    facebook: u.facebook,
+    copyPost: u.copyPost,
+    shareOpened: u.shareOpened,
+    shareCopied: u.shareCopied,
+    copyOk: u.copyOk,
+    copyFail: u.copyFail,
+    shareLinkedInHead: u.shareLinkedInHead,
+    shareStarting: u.shareStarting,
+    shareLatestWin: u.shareLatestWin,
+    shareCommands: u.shareCommands,
+    shareLearnedSoFar: u.shareLearnedSoFar,
+    shareProgress: u.shareProgress,
+    shareCta: u.shareCta,
+    shareXHead: u.shareXHead,
+    shareXFirst: u.shareXFirst,
+  };
+}
+
+/** Legacy alias */
+export const COPY = new Proxy(
+  {},
+  {
+    get: (_target, prop) => copy()[prop],
+  }
+);
 
 /**
  * @typedef {object} ShareContext
