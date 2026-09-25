@@ -37,6 +37,15 @@ import {
   PREDICTS,
   gradePredict,
 } from '../level/assess.js';
+import {
+  newStudyRecord,
+  logEvent,
+  recordInventory,
+  exportStudy,
+  loadStudy,
+  saveStudy,
+  retentionDue,
+} from '../level/study.js';
 
 const state = {
   mode: /** @type {'sandbox' | 'level'} */ ('sandbox'),
@@ -52,6 +61,8 @@ const state = {
   idleCommands: 0,
   _lastMet: 0,
   leitner: loadLeitner(),
+  study: loadStudy(),
+  studyPid: localStorage.getItem('learnbash.studyPid') ?? null,
 };
 
 /** @type {any} */
@@ -79,6 +90,17 @@ export function init() {
   document.getElementById('btn-inventory')?.addEventListener('click', () =>
     openInventory(term, summarizeCurriculum(state.solved).solvedCount > 0 ? 'post' : 'pre')
   );
+  document.getElementById('btn-study-export')?.addEventListener('click', () => {
+    const pkg = exportStudy(state.study);
+    const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `learnbash-study-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    term.print(`Exported study package n=${pkg.n} (anonymous pids only).`);
+    term.focus();
+  });
   document.getElementById('btn-undo')?.addEventListener('click', () => handleLine('undo', term));
   document.getElementById('btn-reset')?.addEventListener('click', () => handleLine('reset', term));
   document.getElementById('btn-help')?.addEventListener('click', () => handleLine('help', term));
@@ -120,6 +142,7 @@ function layoutHTML() {
         <button type="button" id="btn-review" class="btn">Review</button>
         <button type="button" id="btn-predict" class="btn">Predict</button>
         <button type="button" id="btn-inventory" class="btn">Inventory</button>
+        <button type="button" id="btn-study-export" class="btn">Export study</button>
         <button type="button" id="btn-undo" class="btn">Undo</button>
         <button type="button" id="btn-reset" class="btn">Reset</button>
         <button type="button" id="btn-help" class="btn">Help</button>
@@ -920,8 +943,25 @@ export function openInventory(term, variant) {
   const finish = () => {
     const sc = scoreInventory(items, answers);
     const pct = Math.round((sc.score / sc.total) * 100);
+    // Persist to study log (anonymous)
+    if (!state.studyPid) {
+      state.studyPid = 'P' + Math.random().toString(36).slice(2, 8).toUpperCase();
+      try {
+        localStorage.setItem('learnbash.studyPid', state.studyPid);
+      } catch {
+        /* ignore */
+      }
+    }
+    let rec = state.study.find((r) => r.pid === state.studyPid);
+    if (!rec) {
+      rec = newStudyRecord(state.studyPid);
+      state.study.push(rec);
+    }
+    const stage = retentionDue(rec) && rec.post ? 'retention' : variant;
+    recordInventory(rec, stage, items, answers);
+    saveStudy(state.study);
     body.innerHTML = `
-      <p class="brief">Inventory score: <strong>${sc.score}/${sc.total}</strong> (${pct}%).</p>
+      <p class="brief">Inventory score: <strong>${sc.score}/${sc.total}</strong> (${pct}%). Stored as <code>${escapeHtml(state.studyPid)}</code> / ${escapeHtml(stage)}.</p>
       ${
         sc.misses.length
           ? `<div class="learning-box"><div class="next-title">Misconceptions to repair</div><ul>${sc.misses

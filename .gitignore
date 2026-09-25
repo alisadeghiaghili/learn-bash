@@ -4,3 +4,4 @@ node_modules/
 dist/
 .vite/
 output/output/
+output/playwright/*.png

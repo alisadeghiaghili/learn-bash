@@ -267,6 +267,8 @@ test('q-curriculum', () => {
     'c8-case': ['X=yes', 'case $X in yes) touch flag.txt ;; esac'],
     'c9-brace': ['touch {a,b}.txt'],
     'c10-read': ['read L < notes/todo.txt', 'echo $L'],
+    'c11-jobs': ['true &', 'jobs'],
+    'c12-arrays': ['arr=(a b c)', 'echo ${arr[1]}'],
     'x1-report': ['mkdir -p out', 'echo ok > out/summary.txt'],
     'x2-pipeline-report': ['grep e notes/book.txt > hits.txt'],
     'x3-script': [

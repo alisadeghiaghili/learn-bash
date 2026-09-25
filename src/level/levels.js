@@ -889,6 +889,65 @@ Mental model: read is the stdin→variable adapter, the counterpart of echo for 
     ],
   },
 
+  {
+    id: 'c11-jobs',
+    series: 'Control',
+    title: 'Background jobs',
+    objective: 'Run a command with & and list jobs.',
+    brief: 'Run `sleep` (or `true`) in the background and show the job list.',
+    teach: `A trailing \`&\` runs the command in the **background**: the shell returns immediately and prints a job/PID line. \`jobs\` lists background jobs; \`wait\` blocks until they finish.
+
+Job control is process control: you can start long work and keep typing. In this sandbox jobs complete instantly — the mental model is what matters: **async jobs vs foreground commands**.
+
+\`$\` and \`$$\` are process identity; the job id in \`[1]\` is the shell's bookkeeping, not the OS PID.`,
+    learning: [
+      '& backgrounds a command and prints job/PID',
+      'jobs lists; wait reaps',
+      'Foreground vs background is process scheduling',
+    ],
+    hint: 'true & then jobs',
+    par: 2,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'true &', note: 'Background the command' },
+      { command: 'jobs', note: 'List background jobs' },
+    ],
+    checks: [
+      { type: 'op_used', value: '&' },
+      { type: 'cmd_used', value: 'jobs' },
+      { type: 'last_stdout_contains', value: 'done' },
+    ],
+  },
+  {
+    id: 'c12-arrays',
+    series: 'Control',
+    title: 'Arrays',
+    objective: 'Create an array and print an element.',
+    brief: 'Set arr=(a b c) and print the second element.',
+    teach: `Bash arrays are lists of strings: \`arr=(a b c)\`. Index from 0: \`\${arr[1]}\` is \`b\`. \`\${arr[@]}\` is all elements; \`\${#arr[@]}\` is the count.
+
+Arrays beat word-splitting hacks when a list can contain spaces or must be reused. This sandbox supports the common read patterns; full bash arrays also have sparse indices and \`\${!arr[@]}\`.
+
+Mental model: a variable is one string; an array is a named list of strings.`,
+    learning: [
+      'arr=(a b c) builds a list',
+      '${arr[1]} is the second element (0-based)',
+      '${#arr[@]} is the length',
+    ],
+    hint: 'arr=(a b c) then echo ${arr[1]}',
+    par: 2,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'arr=(a b c)', note: 'Create the array' },
+      { command: 'echo ${arr[1]}', note: 'Print element index 1' },
+    ],
+    checks: [
+      { type: 'last_stdout_contains', value: 'b' },
+      { type: 'op_used', value: '(' },
+      { type: 'cmd_used', value: 'echo' },
+    ],
+  },
+
   // ——— Transfer capstones ———
   {
     id: 'x1-report',
