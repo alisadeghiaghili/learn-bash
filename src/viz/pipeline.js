@@ -21,13 +21,14 @@ const PAD_Y = 18;
  *     void
  */
 export function renderPipeline(svg, stages, options = {}) {
-  const width = options.width ?? 520;
+  const width = svg.clientWidth || svg.parentElement?.clientWidth || options.width || 520;
   svg.innerHTML = '';
 
   if (!stages || stages.length === 0) {
     svg.setAttribute('viewBox', `0 0 ${width} 64`);
-    svg.setAttribute('width', '100%');
-    const t = text(PAD_Y, 32, 'Run a pipeline (cmd | cmd) to see data flow', 'muted');
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', '64');
+    const t = text(PAD_Y, 32, 'Run a pipeline (cmd | cmd) to see data flow', 'pipe-flow');
     svg.appendChild(t);
     return;
   }
@@ -36,7 +37,8 @@ export function renderPipeline(svg, stages, options = {}) {
   const diagramW = Math.max(width, PAD_Y * 2 + n * BOX_W + (n - 1) * GAP);
   const height = BOX_H + PAD_Y * 2 + 36;
   svg.setAttribute('viewBox', `0 0 ${diagramW} ${height}`);
-  svg.setAttribute('width', '100%');
+  svg.setAttribute('width', String(diagramW));
+  svg.setAttribute('height', String(height));
 
   stages.forEach((stage, i) => {
     const x = PAD_Y + i * (BOX_W + GAP);

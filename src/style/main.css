@@ -14,9 +14,23 @@
   --error: #f07178;
   --neon: #ff8c1a;
   --line: #24303c;
+  /* Type: one scale, one pair — mono only for code/terminal/paths */
   --mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
-  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --sans: 'IBM Plex Sans', 'Vazirmatn', 'Segoe UI', system-ui, sans-serif;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-body: 15px;
   --radius: 8px;
+}
+
+html[lang='fa'] {
+  --sans: 'Vazirmatn', 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Vazirmatn', 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+html[lang='de'] {
+  --sans: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
 }
 
 * {
@@ -30,8 +44,16 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--sans);
-  font-size: 15px;
+  font-size: var(--fs-body);
   line-height: 1.5;
+  font-synthesis-weight: none;
+}
+
+code,
+pre,
+.terminal-input,
+.terminal-prompt {
+  font-family: var(--mono);
 }
 
 #app {
@@ -284,8 +306,8 @@ body {
 }
 
 .tree-label {
-  font-family: var(--mono);
-  font-size: 13px;
+  font-family: var(--sans);
+  font-size: var(--fs-body);
   font-weight: 500;
   fill: var(--ink);
 }
@@ -306,9 +328,8 @@ body {
 
 .tree-detail {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-md);
   fill: var(--muted);
-  opacity: 1;
 }
 
 .tree-guide {
@@ -322,19 +343,19 @@ body {
 
 .pipe-cmd {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-md);
   fill: var(--ink);
 }
 
 .pipe-meta {
-  font-family: var(--mono);
-  font-size: 11px;
+  font-family: var(--sans);
+  font-size: var(--fs-body);
   fill: var(--muted);
 }
 
 .pipe-flow {
-  font-family: var(--mono);
-  font-size: 11px;
+  font-family: var(--sans);
+  font-size: var(--fs-body);
   fill: var(--muted);
 }
 
@@ -428,11 +449,12 @@ body {
 }
 
 .pane-label {
-  font-family: var(--mono);
-  font-size: 11px;
+  font-family: var(--sans);
+  font-size: var(--fs-sm);
+  font-weight: 500;
   color: var(--muted);
   margin-bottom: 8px;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
 /* —— terminal —— */

@@ -9,6 +9,20 @@ const ROW = 28;
 const INDENT = 22;
 
 /**
+ * Measure SVG layout width so viewBox maps 1:1 to CSS pixels (no zoom).
+ *
+ * Args:
+ *     svg: SVGElement
+ *     fallback: width if layout is not ready
+ * Returns:
+ *     number
+ */
+function measureWidth(svg, fallback) {
+  const w = svg.clientWidth || svg.parentElement?.clientWidth || 0;
+  return w > 40 ? w : fallback;
+}
+
+/**
  * Render the filesystem tree into an SVG element.
  *
  * Args:
@@ -21,15 +35,16 @@ const INDENT = 22;
  *     void
  */
 export function renderTree(svg, rootPath, fs, cwd, options = {}) {
-  const width = options.width ?? 420;
+  const width = measureWidth(svg, options.width ?? 520);
   const home = options.home ?? '/home/learner';
   const root = fs.getNode(rootPath);
   svg.innerHTML = '';
 
   if (!root) {
     svg.setAttribute('viewBox', `0 0 ${width} 80`);
-    svg.setAttribute('width', '100%');
-    addText(svg, PAD, 28, '(empty)', 'muted');
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', '80');
+    addText(svg, PAD, 28, '(empty)', 'tree-label file');
     return;
   }
 
@@ -37,8 +52,10 @@ export function renderTree(svg, rootPath, fs, cwd, options = {}) {
   flatten(root, rootPath, 0, cwd, home, rows);
 
   const height = PAD * 2 + rows.length * ROW;
+  // 1:1 CSS px — same visual size as Learning guide body
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  svg.setAttribute('width', '100%');
+  svg.setAttribute('width', String(width));
+  svg.setAttribute('height', String(height));
 
   rows.forEach((row, i) => {
     const y = PAD + i * ROW + ROW / 2;
