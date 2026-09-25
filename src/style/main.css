@@ -422,30 +422,43 @@ pre,
   font-weight: 600;
 }
 
-/* —— split —— */
+/* —— split: viz on top, terminal full page width below —— */
 .split {
   display: grid;
-  grid-template-columns: 42% 58%;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
   min-height: 0;
   overflow: hidden;
 }
 
-.pane {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding: 12px 14px 8px;
+.viz-pane {
+  grid-row: 1;
+  background: var(--bg);
+  gap: 6px;
+  padding: 12px 14px 4px;
   overflow: auto;
+  max-height: 46vh;
+}
+
+.pane {
+  min-width: 0;
 }
 
 .terminal-pane {
-  border-right: 1px solid var(--line);
+  grid-row: 2;
+  border-top: 1px solid var(--line);
   background: var(--bg);
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 0 0;
+  overflow: hidden;
 }
 
-.viz-pane {
-  background: var(--bg);
-  gap: 6px;
+.terminal-pane .pane-label,
+.terminal-pane .tab-cycle {
+  padding-inline: 16px;
 }
 
 .pane-label {
@@ -462,10 +475,11 @@ pre,
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 280px;
+  min-height: 200px;
+  width: 100%;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-top: 1px solid var(--line);
+  border-radius: 0;
   overflow: hidden;
 }
 
@@ -520,9 +534,10 @@ pre,
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border-top: 1px solid var(--line);
   background: var(--surface-2);
+  width: 100%;
 }
 
 .terminal-prompt {
@@ -534,8 +549,9 @@ pre,
 
 .term-input-wrap {
   position: relative;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--bg);
