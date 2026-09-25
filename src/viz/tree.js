@@ -71,7 +71,7 @@ export function renderTree(svg, rootPath, fs, cwd, options = {}) {
       : row.type === 'dir'
         ? 'tree-label dir'
         : 'tree-label file';
-    addText(svg, x, y, label, klass, row.detail);
+    addText(svg, x, y, label, klass, row.type === 'file' ? row.detail : null);
   });
 }
 
@@ -120,9 +120,10 @@ function addText(svg, x, y, text, klass, detail) {
   t.textContent = text;
   svg.appendChild(t);
 
-  if (detail) {
+  // Preview text only for files — same type size as labels (no ghosted micro type)
+  if (detail && klass.includes('file')) {
     const d = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    d.setAttribute('x', String(x + text.length * 7.5 + 12));
+    d.setAttribute('x', String(x + text.length * 8 + 12));
     d.setAttribute('y', String(y));
     d.setAttribute('dominant-baseline', 'central');
     d.setAttribute('class', 'tree-detail');

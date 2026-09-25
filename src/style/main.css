@@ -248,14 +248,98 @@ body {
   color: var(--muted);
   text-decoration: none;
   padding: 6px;
+  font-size: 13px;
 }
 
 .tb-link:hover {
   color: var(--ink);
 }
 
+.tb-link.support {
+  color: #ffd29a;
+  border: 1px solid color-mix(in srgb, #ff8c1a 40%, var(--line));
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-weight: 600;
+}
+
+.tb-link.support:hover {
+  border-color: var(--neon);
+  color: var(--ink);
+}
+
 .btn.ghost {
   background: transparent;
+}
+
+/* —— viz: match UI type scale (no ghosted tiny SVG text) —— */
+.viz-svg {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.tree-label {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  fill: var(--ink);
+}
+
+.tree-label.dir {
+  fill: var(--pipe);
+  font-weight: 600;
+}
+
+.tree-label.file {
+  fill: var(--ink);
+}
+
+.tree-label.cwd {
+  fill: var(--accent);
+  font-weight: 700;
+}
+
+.tree-detail {
+  font-family: var(--mono);
+  font-size: 12px;
+  fill: var(--muted);
+  opacity: 1;
+}
+
+.tree-guide {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.tree-row-cwd {
+  fill: rgba(94, 224, 160, 0.12);
+}
+
+.pipe-cmd {
+  font-family: var(--mono);
+  font-size: 12px;
+  fill: var(--ink);
+}
+
+.pipe-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.pipe-flow {
+  font-family: var(--mono);
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.pipe-svg {
+  min-height: 100px;
 }
 
 /* mobile: hamburger + drawer */
@@ -685,100 +769,6 @@ body {
 }
 
 /* —— viz —— */
-.viz-svg {
-  width: 100%;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 8px;
-  margin-bottom: 8px;
-}
-
-.pipe-svg {
-  min-height: 88px;
-}
-
-.tree-label {
-  font-family: var(--mono);
-  font-size: 12px;
-  fill: var(--ink);
-}
-
-.tree-label.dir {
-  fill: var(--pipe);
-}
-
-.tree-label.file {
-  fill: var(--ink);
-}
-
-.tree-label.cwd {
-  fill: var(--accent);
-  font-weight: 600;
-}
-
-.tree-detail {
-  font-family: var(--mono);
-  font-size: 10px;
-  fill: var(--muted);
-}
-
-.tree-guide {
-  stroke: var(--line);
-  stroke-width: 1;
-}
-
-.tree-row-cwd {
-  fill: rgba(94, 224, 160, 0.08);
-}
-
-.pipe-rect {
-  fill: var(--surface-2);
-  stroke: var(--line);
-  stroke-width: 1;
-}
-
-.pipe-box.ok .pipe-rect {
-  stroke: var(--accent);
-}
-
-.pipe-box.err .pipe-rect {
-  stroke: var(--error);
-}
-
-.pipe-cmd {
-  font-family: var(--mono);
-  font-size: 11px;
-  fill: var(--ink);
-}
-
-.pipe-meta {
-  font-family: var(--mono);
-  font-size: 10px;
-  fill: var(--muted);
-}
-
-.pipe-link {
-  stroke: var(--pipe);
-  stroke-width: 1.5;
-}
-
-.pipe-chev {
-  stroke: var(--pipe);
-  stroke-width: 1.5;
-  fill: none;
-}
-
-.pipe-token {
-  fill: var(--pipe);
-}
-
-.pipe-flow {
-  font-family: var(--mono);
-  font-size: 10px;
-  fill: var(--muted);
-}
-
 .checks {
   font-family: var(--mono);
   font-size: 12px;
