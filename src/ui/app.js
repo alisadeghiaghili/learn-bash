@@ -295,20 +295,24 @@ function layoutHTML() {
       </div>
     </header>
     <main class="split">
+      <div class="split-top">
+        <section class="pane lesson-pane">
+          <div id="lesson-panel" class="lesson-panel"></div>
+          <div class="pane-label">${escapeHtml(u.checklist)}</div>
+          <div id="checklist" class="checklist"></div>
+          <div id="checks" class="checks" aria-live="polite"></div>
+        </section>
+        <section class="pane viz-pane">
+          <div class="pane-label">${escapeHtml(u.filesystem)}</div>
+          <svg id="tree-svg" class="viz-svg" role="img" aria-label="${escapeHtml(u.filesystem)}"></svg>
+          <div class="pane-label">${escapeHtml(u.pipeline)}</div>
+          <svg id="pipe-svg" class="viz-svg pipe-svg" role="img" aria-label="${escapeHtml(u.pipeline)}"></svg>
+        </section>
+      </div>
       <section class="pane terminal-pane">
         <div class="pane-label">${escapeHtml(u.terminal)}</div>
         <div id="terminal-host"></div>
         <div id="tab-cycle" class="tab-cycle" hidden></div>
-      </section>
-      <section class="pane viz-pane">
-        <div id="lesson-panel" class="lesson-panel"></div>
-        <div class="pane-label">${escapeHtml(u.checklist)}</div>
-        <div id="checklist" class="checklist"></div>
-        <div class="pane-label">${escapeHtml(u.filesystem)}</div>
-        <svg id="tree-svg" class="viz-svg" role="img" aria-label="${escapeHtml(u.filesystem)}"></svg>
-        <div class="pane-label">${escapeHtml(u.pipeline)}</div>
-        <svg id="pipe-svg" class="viz-svg pipe-svg" role="img" aria-label="${escapeHtml(u.pipeline)}"></svg>
-        <div id="checks" class="checks" aria-live="polite"></div>
       </section>
     </main>
     <footer class="goalbar">

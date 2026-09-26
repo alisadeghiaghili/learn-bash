@@ -465,12 +465,21 @@ pre,
   font-weight: 600;
 }
 
-/* —— split: terminal left, viz right (LGB-style) —— */
+/* —— split: two top panes side-by-side, terminal full width below —— */
 .split {
   display: grid;
-  grid-template-columns: minmax(280px, 42%) 1fr;
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr) minmax(180px, 32vh);
   min-height: 0;
   overflow: hidden;
+}
+
+.split-top {
+  display: grid;
+  grid-template-columns: minmax(260px, 42%) 1fr;
+  min-height: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
 }
 
 .pane {
@@ -482,21 +491,61 @@ pre,
   overflow: auto;
 }
 
-.terminal-pane {
+.lesson-pane {
   border-right: 1px solid var(--line);
   background: var(--bg);
-  overflow: hidden;
-  padding: 12px 0 0;
-}
-
-.terminal-pane .pane-label,
-.terminal-pane .tab-cycle {
-  padding-inline: 14px;
 }
 
 .viz-pane {
   background: var(--bg);
   gap: 6px;
+}
+
+/* Terminal: full page width, input stretches edge to edge */
+.terminal-pane {
+  border-top: none;
+  background: var(--bg);
+  width: 100%;
+  padding: 8px 0 0;
+  overflow: hidden;
+}
+
+.terminal-pane .pane-label,
+.terminal-pane .tab-cycle {
+  padding-inline: 16px;
+}
+
+.terminal {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
+  width: 100%;
+  background: var(--surface);
+  border: none;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.terminal-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+  width: 100%;
+}
+
+.term-input-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
 }
 
 .pane-label {
@@ -1200,17 +1249,16 @@ pre,
 @media (max-width: 900px) {
   .split {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
+    grid-template-rows: auto minmax(160px, 36vh);
   }
 
-  .terminal-pane {
+  .split-top {
+    grid-template-columns: 1fr;
+  }
+
+  .lesson-pane {
     border-right: none;
     border-bottom: 1px solid var(--line);
-  }
-
-  .terminal {
-    min-height: 220px;
-    height: 40vh;
   }
 
   .share-row {
