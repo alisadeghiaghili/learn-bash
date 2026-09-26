@@ -80,10 +80,19 @@ pre,
   font-size: 15px;
   letter-spacing: 0.02em;
   color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.brand span {
+.brand-logo {
+  display: block;
+  border-radius: 6px;
+}
+
+.brand b {
   color: var(--accent);
+  font-weight: 700;
 }
 
 .level-title {
@@ -456,43 +465,38 @@ pre,
   font-weight: 600;
 }
 
-/* —— split: viz on top, terminal full page width below —— */
+/* —— split: terminal left, viz right (LGB-style) —— */
 .split {
   display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr;
+  grid-template-columns: minmax(280px, 42%) 1fr;
   min-height: 0;
   overflow: hidden;
-}
-
-.viz-pane {
-  grid-row: 1;
-  background: var(--bg);
-  gap: 6px;
-  padding: 12px 14px 4px;
-  overflow: auto;
-  max-height: 46vh;
 }
 
 .pane {
   min-width: 0;
-}
-
-.terminal-pane {
-  grid-row: 2;
-  border-top: 1px solid var(--line);
-  background: var(--bg);
-  width: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 10px 0 0;
+  padding: 12px 14px 8px;
+  overflow: auto;
+}
+
+.terminal-pane {
+  border-right: 1px solid var(--line);
+  background: var(--bg);
   overflow: hidden;
+  padding: 12px 0 0;
 }
 
 .terminal-pane .pane-label,
 .terminal-pane .tab-cycle {
-  padding-inline: 16px;
+  padding-inline: 14px;
+}
+
+.viz-pane {
+  background: var(--bg);
+  gap: 6px;
 }
 
 .pane-label {
@@ -509,11 +513,11 @@ pre,
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 200px;
+  min-height: 240px;
   width: 100%;
   background: var(--surface);
-  border-top: 1px solid var(--line);
-  border-radius: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -568,7 +572,7 @@ pre,
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 10px 12px;
   border-top: 1px solid var(--line);
   background: var(--surface-2);
   width: 100%;
@@ -1202,10 +1206,6 @@ pre,
   .terminal-pane {
     border-right: none;
     border-bottom: 1px solid var(--line);
-  }
-
-  .pane {
-    max-height: none;
   }
 
   .terminal {

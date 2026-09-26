@@ -262,7 +262,10 @@ function layoutHTML() {
   ).join('');
   return `
     <header class="toolbar">
-      <div class="brand">Learn<span>Bash</span></div>
+      <div class="brand">
+        <img class="brand-logo" src="./assets/logo.svg" width="28" height="28" alt="" />
+        <span>Learn<b>Bash</b></span>
+      </div>
       <div class="level-title" id="level-title"></div>
       <div class="toolbar-actions">
         <div class="lang-menu">
@@ -292,6 +295,11 @@ function layoutHTML() {
       </div>
     </header>
     <main class="split">
+      <section class="pane terminal-pane">
+        <div class="pane-label">${escapeHtml(u.terminal)}</div>
+        <div id="terminal-host"></div>
+        <div id="tab-cycle" class="tab-cycle" hidden></div>
+      </section>
       <section class="pane viz-pane">
         <div id="lesson-panel" class="lesson-panel"></div>
         <div class="pane-label">${escapeHtml(u.checklist)}</div>
@@ -301,11 +309,6 @@ function layoutHTML() {
         <div class="pane-label">${escapeHtml(u.pipeline)}</div>
         <svg id="pipe-svg" class="viz-svg pipe-svg" role="img" aria-label="${escapeHtml(u.pipeline)}"></svg>
         <div id="checks" class="checks" aria-live="polite"></div>
-      </section>
-      <section class="pane terminal-pane">
-        <div class="pane-label">${escapeHtml(u.terminal)}</div>
-        <div id="terminal-host"></div>
-        <div id="tab-cycle" class="tab-cycle" hidden></div>
       </section>
     </main>
     <footer class="goalbar">
