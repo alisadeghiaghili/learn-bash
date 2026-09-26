@@ -109,32 +109,34 @@ pre,
 }
 
 .lang-btn {
-  min-width: 3.2rem;
-  min-height: 36px;
-  padding: 6px 10px;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
+  min-width: 4.2rem;
+  min-height: 42px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border: 1px solid #3a4654;
+  border-radius: 10px;
+  background: #24303c;
+  color: var(--ink);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .lang-btn:hover {
-  border-color: var(--accent);
+  border-color: #5a6a7c;
+  background: #2c3a48;
 }
 
 .lang-caret {
   width: 0;
   height: 0;
-  border-inline-start: 4px solid transparent;
-  border-inline-end: 4px solid transparent;
-  border-top: 5px solid currentColor;
-  opacity: 0.7;
+  border-inline-start: 5px solid transparent;
+  border-inline-end: 5px solid transparent;
+  border-top: 6px solid currentColor;
+  opacity: 0.85;
 }
 
 .lang-dropdown {
@@ -144,7 +146,7 @@ pre,
   inset-inline-end: 0;
   flex-direction: column;
   gap: 4px;
-  min-width: 88px;
+  min-width: 96px;
   padding: 6px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -174,7 +176,7 @@ pre,
   color: inherit;
   cursor: pointer;
   text-align: start;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.04em;
 }
 
@@ -191,9 +193,9 @@ pre,
   display: none;
   width: 42px;
   height: 42px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: transparent;
+  border: 1px solid #3a4654;
+  border-radius: 10px;
+  background: #24303c;
   color: var(--ink);
   cursor: pointer;
   align-items: center;
@@ -227,67 +229,99 @@ pre,
   top: 6px;
 }
 
+/* Toolbar pills — same as learn-dvc screenshot */
 .nav-drawer {
   display: contents;
 }
 
 .nav-drawer button {
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--ink);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 6px 10px;
+  background: #24303c;
+  border: 1px solid #3a4654;
+  border-radius: 10px;
+  padding: 8px 16px;
+  min-height: 42px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .nav-drawer button:hover,
 .nav-drawer button:focus-visible {
-  border-color: var(--accent);
+  border-color: #5a6a7c;
+  background: #2c3a48;
   outline: none;
 }
 
 .nav-drawer button.ghost {
-  background: transparent;
+  background: #24303c;
 }
 
 .help-btn {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: transparent;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+  border: 1px solid #3a4654;
+  border-radius: 10px;
+  background: #24303c;
   color: var(--ink);
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.help-btn:hover {
+  border-color: #5a6a7c;
+  background: #2c3a48;
 }
 
 .tb-link {
   display: inline-flex;
   align-items: center;
-  color: var(--muted);
+  justify-content: center;
+  color: var(--ink);
   text-decoration: none;
-  padding: 6px;
-  font-size: 13px;
+  min-height: 42px;
+  min-width: 42px;
+  padding: 8px 14px;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid #3a4654;
+  border-radius: 10px;
+  background: #24303c;
 }
 
 .tb-link:hover {
+  border-color: #5a6a7c;
+  background: #2c3a48;
   color: var(--ink);
+}
+
+.tb-link.gh {
+  padding: 8px 12px;
 }
 
 .tb-link.support {
-  color: #ffd29a;
-  border: 1px solid color-mix(in srgb, #ff8c1a 40%, var(--line));
-  border-radius: var(--radius);
-  padding: 6px 10px;
+  color: #f0d78c;
+  background: #3a3220;
+  border-color: #b8963e;
+  padding: 8px 18px;
   font-weight: 600;
+  min-width: auto;
 }
 
 .tb-link.support:hover {
-  border-color: var(--neon);
-  color: var(--ink);
+  border-color: #e0c060;
+  background: #4a4028;
+  color: #ffe9a8;
 }
 
 .btn.ghost {
