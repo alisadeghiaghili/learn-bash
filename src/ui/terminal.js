@@ -84,6 +84,7 @@ export function createTerminal(root, handlers) {
 
   root.innerHTML = `
     <div class="terminal-screen" role="log" aria-live="polite"></div>
+    <div class="term-hint" id="term-hint" hidden dir="ltr"></div>
     <form class="terminal-form" autocomplete="off">
       <span class="terminal-prompt"></span>
       <div class="term-input-wrap">
@@ -101,10 +102,12 @@ export function createTerminal(root, handlers) {
   const wrapEl = root.querySelector('.term-input-wrap');
   const ghostEl = root.querySelector('.term-ghost');
   const input = root.querySelector('.terminal-input');
+  const hintEl = root.querySelector('.term-hint');
 
   const history = [];
   let historyIdx = history.length;
   let draft = '';
+  let hint = '';
   let extraCompletions = [];
   let wordCycle = [];
   let wordIdx = 0;
@@ -334,6 +337,14 @@ export function createTerminal(root, handlers) {
     screen.scrollTop = screen.scrollHeight;
   };
 
+  const printHtml = (html, klass = '') => {
+    const block = document.createElement('div');
+    block.className = `terminal-line ${klass}`.trim();
+    block.innerHTML = html;
+    screen.appendChild(block);
+    screen.scrollTop = screen.scrollHeight;
+  };
+
   const printTrace = (prompt, line, trace) => {
     const echo = document.createElement('div');
     echo.className = 'terminal-line echo';
@@ -380,13 +391,29 @@ export function createTerminal(root, handlers) {
     syncGhost();
   };
 
+  const setHint = (command) => {
+    hint = command ?? '';
+    if (command && hintEl) {
+      hintEl.innerHTML = `Next: <code class="hint-cmd">${escapeHtml(command)}</code> <span class="hint-sub">· Tab fills one word at a time</span>`;
+      hintEl.hidden = false;
+      input.placeholder = `Next: ${command}  (Tab steps word-by-word)`;
+    } else if (hintEl) {
+      hintEl.innerHTML = '';
+      hintEl.hidden = true;
+      input.placeholder = '';
+    }
+    syncGhost();
+  };
+
   return {
     print,
+    printHtml,
     printTrace,
     clear,
     focus,
     setPrompt,
     setExtraCompletions,
+    setHint,
     pushHistory: (l) => {
       if (l.trim()) {
         history.push(l);

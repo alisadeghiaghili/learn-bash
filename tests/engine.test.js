@@ -10,7 +10,6 @@ import { Shell } from '../src/bash/shell.js';
 import { buildFS } from '../src/bash/fs.js';
 
 test('a-glob', () => {
-  console.log('run a-glob');
   assert.ok(globToRegExp('*.txt').test('a.txt'));
   assert.ok(!globToRegExp('*.txt').test('a.md'));
   assert.ok(globToRegExp('a?c').test('abc'));
@@ -18,13 +17,11 @@ test('a-glob', () => {
 });
 
 test('b-arith', () => {
-  console.log('run b-arith');
   assert.equal(evalArith('N * 4', { N: 2 }), 8);
   assert.equal(evalArith('1 + 2 * 3', {}), 7);
 });
 
 test('c-glob-fs', () => {
-  console.log('run c-glob-fs');
   const shell = createSandboxShell();
   const t = shell.execute('ls data/*.txt');
   assert.match(t.stdout, /a\.txt/);
@@ -32,7 +29,6 @@ test('c-glob-fs', () => {
 });
 
 test('d-subst', () => {
-  console.log('run d-subst');
   const shell = createSandboxShell();
   const arith = shell.execute('echo $((2 + 3))');
   assert.match(arith.stdout, /5/);
@@ -41,7 +37,6 @@ test('d-subst', () => {
 });
 
 test('e-vars', () => {
-  console.log('run e-vars');
   const shell = createSandboxShell();
   shell.execute('NAME=ada');
   assert.equal(shell.env.NAME, 'ada');
@@ -52,7 +47,6 @@ test('e-vars', () => {
 });
 
 test('f-stderr', () => {
-  console.log('run f-stderr');
   const shell = createSandboxShell();
   shell.execute('cat missing.txt 2> err.txt');
   const node = shell.fs.getNode('/home/learner/err.txt');
@@ -61,14 +55,12 @@ test('f-stderr', () => {
 });
 
 test('g-parse-2gt', () => {
-  console.log('run g-parse-2gt');
   const { stages } = parseLine('cat missing.txt 2> err.txt');
   assert.equal(stages[0].stderrFile, 'err.txt');
   assert.equal(stages[0].stdoutFile, null);
 });
 
 test('h-if', () => {
-  console.log('run h-if');
   const shell = createSandboxShell();
   shell.execute('if [ -f notes/todo.txt ]; then touch present.txt; fi');
   assert.ok(shell.fs.getNode('/home/learner/present.txt'));
@@ -77,7 +69,6 @@ test('h-if', () => {
 });
 
 test('i-for', () => {
-  console.log('run i-for');
   const shell = createSandboxShell();
   shell.execute('for x in p q r; do touch $x.txt; done');
   assert.ok(shell.fs.getNode('/home/learner/p.txt'));
@@ -85,7 +76,6 @@ test('i-for', () => {
 });
 
 test('j-while', () => {
-  console.log('run j-while');
   const shell = createSandboxShell();
   shell.execute('N=0');
   shell.execute('while [ $N -lt 3 ]; do N=$((N + 1)); done');
@@ -93,7 +83,6 @@ test('j-while', () => {
 });
 
 test('k-script', () => {
-  console.log('run k-script');
   const shell = createSandboxShell();
   shell.execute('echo echo building > build.sh');
   shell.execute('echo touch built.txt >> build.sh');
@@ -103,7 +92,6 @@ test('k-script', () => {
 });
 
 test('l-test-builtin', () => {
-  console.log('run l-test-builtin');
   const shell = createSandboxShell();
   assert.equal(shell.execute('test -f README.md').code, 0);
   assert.equal(shell.execute('test -f missing').code, 1);
@@ -112,7 +100,6 @@ test('l-test-builtin', () => {
 });
 
 test('m-and-or', () => {
-  console.log('run m-and-or');
   const shell = createSandboxShell();
   shell.execute('true && touch ok.txt');
   assert.ok(shell.fs.getNode('/home/learner/ok.txt'));
@@ -123,7 +110,6 @@ test('m-and-or', () => {
 });
 
 test('n-needs-cf', () => {
-  console.log('run n-needs-cf');
   assert.ok(needsControlFlow('if [ -f x ]; then echo y; fi'));
   assert.ok(needsControlFlow('for i in 1 2; do echo $i; done'));
   assert.ok(!needsControlFlow('echo hi | wc -l'));
@@ -132,7 +118,6 @@ test('n-needs-cf', () => {
 });
 
 test('o-parse-cf', () => {
-  console.log('run o-parse-cf');
   const stmts = parseScript('if [ -f a ]; then touch b; fi');
   assert.equal(stmts[0].type, 'if');
   const forStmts = parseScript('for x in a b; do echo $x; done');
@@ -141,7 +126,6 @@ test('o-parse-cf', () => {
 });
 
 test('p-quiz', () => {
-  console.log('run p-quiz');
   assert.ok(QUIZ.length >= 10);
   const q = QUIZ[0];
   assert.equal(gradeQuiz(q, q.answer).ok, true);
@@ -151,7 +135,6 @@ test('p-quiz', () => {
 });
 
 test('r-functions', () => {
-  console.log('run r-functions');
   const shell = createSandboxShell();
   shell.execute('greet() { echo hello $1; }');
   assert.ok(shell.functions.has('greet'));
@@ -160,7 +143,6 @@ test('r-functions', () => {
 });
 
 test('s-double-bracket', () => {
-  console.log('run s-double-bracket');
   const shell = createSandboxShell();
   shell.execute('NAME=ada');
   assert.equal(shell.execute('[[ $NAME == ada ]]').code, 0);
@@ -170,14 +152,12 @@ test('s-double-bracket', () => {
 });
 
 test('t-process-sub', () => {
-  console.log('run t-process-sub');
   const shell = createSandboxShell();
   const t = shell.execute('cat <(echo hi)');
   assert.match(t.stdout, /hi/);
 });
 
 test('u-brace-case-read', () => {
-  console.log('run u-brace-case-read');
   const shell = createSandboxShell();
   shell.execute('touch {x,y}.txt');
   assert.ok(shell.fs.getNode('/home/learner/x.txt'));
@@ -190,7 +170,6 @@ test('u-brace-case-read', () => {
 });
 
 test('v-assess-discrimination', async () => {
-  console.log('run v-assess-discrimination');
   const {
     NOVICE_MODEL,
     scoreModel,
@@ -222,7 +201,6 @@ test('v-assess-discrimination', async () => {
 });
 
 test('w-jobs-arrays', () => {
-  console.log('run w-jobs-arrays');
   const shell = createSandboxShell();
   shell.execute('echo hi &');
   const jobs = shell.execute('jobs');
@@ -234,7 +212,6 @@ test('w-jobs-arrays', () => {
 });
 
 test('q-curriculum', () => {
-  console.log('run q-curriculum');
   const solutions = {
     'b1-pwd': ['pwd'],
     'b2-ls': ['ls'],

@@ -20,8 +20,8 @@ Live demo: https://alisadeghiaghili.github.io/learn-bash/
 ## Modes
 
 - **Sandbox** — free exploration with a starter home directory
-- **Levels** — 28 goal-driven lessons in 6 series (Basics → Transfer) with
-  deep teach panels, command golf, concept quizzes, and spaced review
+- **Levels** — 38 goal-driven lessons in 8 series (Basics → Checkpoints) with
+  deep teach panels, production field notes, command golf, concept quizzes, and spaced review
 
 ## Curriculum
 
@@ -29,11 +29,12 @@ Live demo: https://alisadeghiaghili.github.io/learn-bash/
 |--------|--------|
 | Basics | pwd, ls, cd, echo, variables |
 | Files | touch, mkdir, mv, cp, rm |
-| Text | cat, redirects, wc, sort |
-| Streams | pipes, grep, stderr, chains |
-| Quoting | globs, quotes, `$(...)` |
-| Control | exit codes, `test`/`if`, `for`, arithmetic |
-| Transfer | multi-step projects and scripts |
+| Text | cat, redirects, wc, sort, cut, tr |
+| Streams | pipes, grep, stderr, tee, chains |
+| Quoting | globs, quotes, `$(...)`, arithmetic |
+| Control | exit codes, `test`/`if`, `for`, `while`, scripts |
+| Transfer | multi-step projects, strict mode, and pipelines |
+| Checkpoints | comprehensive assessments and review challenges |
 
 ## Engine commands (beyond core bash)
 

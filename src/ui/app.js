@@ -46,6 +46,7 @@ import {
   saveStudy,
   retentionDue,
 } from '../level/study.js';
+import { renderMarkdown, showModal, escapeHtml } from './dialog.js';
 import {
   ui as t,
   LOCALES,
@@ -71,11 +72,18 @@ const state = {
   _lastMet: 0,
   leitner: loadLeitner(),
   study: loadStudy(),
-  studyPid: localStorage.getItem('learnbash.studyPid') ?? null,
+  studyPid:
+    typeof localStorage !== 'undefined'
+      ? localStorage.getItem('learnbash.studyPid') ?? null
+      : null,
 };
 
 /** @type {any} */
 let termRef = null;
+
+function getTerm() {
+  return termRef;
+}
 
 /**
  * Boot the app once DOM is ready.
@@ -94,8 +102,11 @@ export function init() {
   wireToolbar(term);
 
   enterSandbox(term, true);
+  const u = t();
   const summary = summarizeCurriculum(state.solved);
-  term.print(t().welcome);
+  term.printHtml(
+    `Welcome to Learn<b style="color:var(--accent);font-weight:700">Bash</b> — ${escapeHtml(u.appWelcome || 'type help for commands, levels to learn.')}`
+  );
   if (summary.solvedCount > 0) {
     term.print(resumeLine(summary));
   }
@@ -124,34 +135,14 @@ function wireToolbar(term) {
       closeNav();
       closeLang();
       if (action === 'levels') openLevels();
-      if (action === 'goal') showGoal(term);
-      if (action === 'quiz') openQuiz(term, 'current');
-      if (action === 'review') openQuiz(term, 'review');
-      if (action === 'predict') openQuiz(term, 'predict');
-      if (action === 'inventory') {
-        openInventory(
-          term,
-          summarizeCurriculum(state.solved).solvedCount > 0 ? 'post' : 'pre'
-        );
-      }
-      if (action === 'export-study') {
-        const pkg = exportStudy(state.study);
-        const blob = new Blob([JSON.stringify(pkg, null, 2)], {
-          type: 'application/json',
-        });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `learnbash-study-${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        term.print(
-          `${t().exportedStudy} n=${pkg.n} ${t().anonymousOnly}`
-        );
-      }
+      if (action === 'lesson') replayLesson(term);
+      if (action === 'goal') focusGuide();
+      if (action === 'hint') showHint(term);
+      if (action === 'solution') showSolution(term);
       if (action === 'undo') handleLine('undo', term);
       if (action === 'reset') handleLine('reset', term);
       if (action === 'sandbox') enterSandbox(term);
-      if (action === 'help') handleLine('help', term);
+      if (action === 'help') showHelp(term);
       term.focus();
     });
   });
@@ -165,16 +156,6 @@ function wireToolbar(term) {
       setLocale(loc);
       remountAfterLocale(term);
     });
-  });
-  document.getElementById('modal-close')?.addEventListener('click', () => {
-    closeModal();
-    term.focus();
-  });
-  document.getElementById('modal')?.addEventListener('click', (e) => {
-    if (e.target?.id === 'modal') {
-      closeModal();
-      term.focus();
-    }
   });
 }
 
@@ -238,10 +219,6 @@ function remountAfterLocale(term) {
       state.mode = 'level';
       state.traces = traces;
       state.doneSteps = doneSteps;
-      setHeader(state.level.series, state.level.title);
-      setGoal(state.level.brief);
-      renderLesson(state.level);
-      renderChecklist(solutionProgress(state.level, state.doneSteps, state.traces));
       renderAll();
       newTerm.setPrompt(state.shell.prompt());
       newTerm.print(state.level.brief);
@@ -261,73 +238,52 @@ function layoutHTML() {
       `<button type="button" class="lang-option${current === loc ? ' on' : ''}" data-lang="${loc}" role="menuitem" aria-checked="${current === loc}">${loc.toUpperCase()}</button>`
   ).join('');
   return `
-    <header class="toolbar">
-      <div class="brand">
-        <img class="brand-logo" src="./assets/logo.svg" width="28" height="28" alt="" />
-        <span>Learn<b>Bash</b></span>
-      </div>
-      <div class="level-title" id="level-title"></div>
-      <div class="toolbar-actions">
-        <div class="lang-menu">
-          <button type="button" class="lang-btn" data-action="lang-toggle" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeHtml(u.language)}">
-            <span data-lang-label>${current.toUpperCase()}</span>
-            <span class="lang-caret" aria-hidden="true"></span>
-          </button>
-          <div class="lang-dropdown" id="lang-dropdown" role="menu" hidden>
-            ${langItems}
+    <div class="app-main">
+      <header class="toolbar">
+        <div class="brand" data-help-id="brand">
+          <img class="brand-logo" src="./assets/logo.svg" width="28" height="28" alt="" />
+          <span>Learn<b>Bash</b></span>
+        </div>
+        <div class="level-title" id="level-title" data-help-id="level-title"></div>
+        <div class="toolbar-actions" data-help-id="toolbar">
+          <div class="lang-menu">
+            <button type="button" class="lang-btn" data-action="lang-toggle" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeHtml(u.language)}">
+              <span data-lang-label>${current.toUpperCase()}</span>
+              <span class="lang-caret" aria-hidden="true"></span>
+            </button>
+            <div class="lang-dropdown" id="lang-dropdown" role="menu" hidden>
+              ${langItems}
+            </div>
           </div>
+          <button type="button" class="nav-toggle" data-action="nav-toggle" aria-label="${escapeHtml(u.menuLabel)}" aria-expanded="false" aria-controls="nav-drawer">
+            <span class="nav-bars" aria-hidden="true"></span>
+          </button>
+          <div class="nav-drawer" id="nav-drawer" hidden>
+            <button type="button" data-action="levels">${escapeHtml(u.levels)}</button>
+            <button type="button" data-action="lesson" title="${escapeHtml(u.lessonTitle)}">${escapeHtml(u.lesson)}</button>
+            <button type="button" data-action="goal">${escapeHtml(u.guide)}</button>
+            <button type="button" data-action="hint">${escapeHtml(u.hint)}</button>
+            <button type="button" data-action="solution">${escapeHtml(u.solution)}</button>
+            <button type="button" data-action="undo">${escapeHtml(u.undo)}</button>
+            <button type="button" data-action="reset">${escapeHtml(u.reset)}</button>
+            <button type="button" data-action="sandbox" class="ghost">${escapeHtml(u.sandboxBtn)}</button>
+            <button type="button" class="help-btn" data-action="help" title="${escapeHtml(u.uiGuideTitle)}" aria-label="${escapeHtml(u.help)}">?</button>
+          </div>
+          <a class="tb-link gh" data-help-id="links" href="https://github.com/alisadeghiaghili/learn-bash" target="_blank" rel="noopener noreferrer" title="${escapeHtml(u.githubTitle)}" aria-label="GitHub repository"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true" width="18" height="18"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+          <a class="tb-link support" data-help-id="links" href="https://www.buymeacoffee.com/alisadeghil" target="_blank" rel="noopener noreferrer" title="${escapeHtml(u.supportTitle)}">${escapeHtml(u.support)}</a>
         </div>
-        <button type="button" class="nav-toggle" data-action="nav-toggle" aria-label="${escapeHtml(u.menuLabel)}" aria-expanded="false" aria-controls="nav-drawer">
-          <span class="nav-bars" aria-hidden="true"></span>
-        </button>
-        <div class="nav-drawer" id="nav-drawer" hidden>
-          <button type="button" data-action="levels">${escapeHtml(u.levels)}</button>
-          <button type="button" data-action="goal">${escapeHtml(u.goal)}</button>
-          <button type="button" data-action="quiz">${escapeHtml(u.quiz)}</button>
-          <button type="button" data-action="review">${escapeHtml(u.review)}</button>
-          <button type="button" data-action="undo">${escapeHtml(u.undo)}</button>
-          <button type="button" data-action="reset">${escapeHtml(u.reset)}</button>
-          <button type="button" data-action="sandbox">${escapeHtml(u.sandboxBtn)}</button>
-          <button type="button" class="help-btn" data-action="help" title="${escapeHtml(u.help)}" aria-label="${escapeHtml(u.help)}">?</button>
-          <a class="tb-link gh" href="https://github.com/alisadeghiaghili/learn-bash" target="_blank" rel="noopener noreferrer" title="${escapeHtml(u.githubTitle)}" aria-label="GitHub"><svg class="gh-mark" viewBox="0 0 16 16" aria-hidden="true" width="18" height="18"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
-          <a class="tb-link support" href="https://www.buymeacoffee.com/alisadeghil" target="_blank" rel="noopener noreferrer" title="${escapeHtml(u.supportTitle)}">${escapeHtml(u.support)}</a>
-        </div>
-      </div>
-    </header>
-    <main class="split">
-      <div class="split-top">
-        <section class="pane lesson-pane">
-          <div id="lesson-panel" class="lesson-panel"></div>
-          <div class="pane-label">${escapeHtml(u.checklist)}</div>
-          <div id="checklist" class="checklist"></div>
-          <div id="checks" class="checks" aria-live="polite"></div>
-        </section>
-        <section class="pane viz-pane">
+      </header>
+      <div class="board-wrap" id="board-wrap">
+        <div class="viz-pane">
           <div class="pane-label">${escapeHtml(u.filesystem)}</div>
           <svg id="tree-svg" class="viz-svg" role="img" aria-label="${escapeHtml(u.filesystem)}"></svg>
           <div class="pane-label">${escapeHtml(u.pipeline)}</div>
           <svg id="pipe-svg" class="viz-svg pipe-svg" role="img" aria-label="${escapeHtml(u.pipeline)}"></svg>
-        </section>
-      </div>
-      <section class="pane terminal-pane">
-        <div class="pane-label">${escapeHtml(u.terminal)}</div>
-        <div id="terminal-host"></div>
-        <div id="tab-cycle" class="tab-cycle" hidden></div>
-      </section>
-    </main>
-    <footer class="goalbar">
-      <span class="goal-label">${escapeHtml(u.goalLabel)}</span>
-      <span id="goal-text">${escapeHtml(u.goalDefault)}</span>
-    </footer>
-    <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
-      <div class="modal-card">
-        <div class="modal-head">
-          <h2 id="modal-title">${escapeHtml(u.levels)}</h2>
-          <button type="button" id="modal-close" class="btn ghost">${escapeHtml(u.close)}</button>
         </div>
-        <div id="modal-body" class="modal-body"></div>
       </div>
+      <div class="terminal" id="terminal-host" data-help-id="term-log"></div>
     </div>
+    <aside class="dock" id="dock" data-help-id="dock" aria-label="${escapeHtml(u.guidePanel)}"></aside>
   `;
 }
 
@@ -346,16 +302,23 @@ function enterSandbox(term, silent = false) {
   state.traces = [];
   state.doneSteps = new Set();
   state.offered = false;
-  setHeader(t().modeSandbox, t().freeExplore);
-  setGoal(t().goalDefault);
-  renderLesson(null);
-  renderChecklist([]);
   renderAll();
   term.setPrompt(state.shell.prompt());
   term.setExtraCompletions([]);
   if (!silent) term.print(t().sandboxReady);
-  updateChecks([]);
   term.focus();
+}
+
+/**
+ * Guide panel is always visible — this only scrolls/flashes it.
+ */
+function focusGuide() {
+  const dock = document.getElementById('dock');
+  if (!dock) return;
+  dock.classList.remove('dock-pulse');
+  void dock.offsetWidth;
+  dock.classList.add('dock-pulse');
+  dock.scrollTop = 0;
 }
 
 /**
@@ -380,28 +343,16 @@ function startLevel(id, term) {
   state.offered = false;
   state.hintIdx = 0;
   state.idleCommands = 0;
-  setHeader(state.level.series, state.level.title);
-  setGoal(state.level.brief);
-  document.getElementById('golf')?.remove();
-  const meta = document.getElementById('level-title');
-  if (meta) {
-    meta.textContent = `${state.level.series} · ${state.level.title} · ${t().parShort} ${state.level.par}`;
-  }
-  renderLesson(level);
-  renderChecklist(
-    solutionProgress(level, state.doneSteps, state.traces)
-  );
+
   renderAll();
   term.setPrompt(state.shell.prompt());
-  term.setExtraCompletions((level.solution ?? []).map((s) => s.command));
   term.clear();
   term.print(`Level: ${level.title}`);
   term.print(level.objective);
   term.print(level.brief);
   if (level.transfer) term.print(`Transfer: ${level.transfer}`);
   term.print(`Hint: ${level.hint}`);
-  updateChecks(level.checks.map((c) => ({ ...c, ok: false })));
-  showLevelDialog(level);
+  showLevelDialog(state.level);
 }
 
 /**
@@ -412,48 +363,77 @@ function startLevel(id, term) {
  *     term: terminal API
  */
 function handleLine(line, term) {
+  const raw = line.trim();
   const prompt = state.shell.prompt();
-  const trace = state.shell.execute(line);
+  const lower = raw.toLowerCase();
 
-  if (trace.app === 'levels') {
-    if (line.trim()) term.pushHistory(line);
+  // Meta commands
+  if (lower === 'levels' || lower === 'level') {
+    if (raw) term.pushHistory(raw);
     openLevels();
     return;
   }
-  if (trace.app === 'goal') {
-    if (line.trim()) term.pushHistory(line);
-    showGoal(term);
+  if (lower === 'lesson' || lower === 'intro') {
+    if (raw) term.pushHistory(raw);
+    replayLesson(term);
+    return;
+  }
+  if (lower === 'goal' || lower === 'guide') {
+    if (raw) term.pushHistory(raw);
+    focusGuide();
     term.focus();
     return;
   }
-  if (trace.app === 'quiz') {
-    if (line.trim()) term.pushHistory(line);
+  if (lower === 'hint') {
+    if (raw) term.pushHistory(raw);
+    showHint(term);
+    return;
+  }
+  if (lower === 'solution') {
+    if (raw) term.pushHistory(raw);
+    showSolution(term);
+    return;
+  }
+  if (lower === 'sandbox' || lower === 'exit') {
+    if (raw) term.pushHistory(raw);
+    enterSandbox(term);
+    return;
+  }
+  if (lower === 'help' || lower === '?') {
+    if (raw) term.pushHistory(raw);
+    showHelp(term);
+    return;
+  }
+  if (lower === 'quiz') {
+    if (raw) term.pushHistory(raw);
     openQuiz(term, 'current');
     return;
   }
-  if (trace.app === 'review') {
-    if (line.trim()) term.pushHistory(line);
+  if (lower === 'review') {
+    if (raw) term.pushHistory(raw);
     openQuiz(term, 'review');
     return;
   }
-  if (trace.app === 'predict' || trace.app === 'inventory') {
-    if (line.trim()) term.pushHistory(line);
-    if (trace.app === 'predict') openQuiz(term, 'predict');
+  if (lower === 'predict' || lower === 'inventory') {
+    if (raw) term.pushHistory(raw);
+    if (lower === 'predict') openQuiz(term, 'predict');
     else openInventory(term, summarizeCurriculum(state.solved).solvedCount > 0 ? 'post' : 'pre');
     return;
   }
-  if (trace.app === 'reset') {
-    if (line.trim()) term.pushHistory(line);
+  if (lower === 'reset') {
+    if (raw) term.pushHistory(raw);
     doReset(term);
     return;
   }
 
+  const trace = state.shell.execute(line);
+
   if (trace.clear) {
     term.clear();
-    if (line.trim()) term.pushHistory(line);
-  } else if (line.trim()) {
+    if (raw) term.pushHistory(raw);
+  } else if (raw) {
     term.printTrace(prompt, line, trace);
-    if (line.trim() !== 'undo') {
+    if (raw !== 'undo') {
       state.traces.push(trace);
     }
   }
@@ -466,28 +446,26 @@ function handleLine(line, term) {
       ...c,
       ok: runCheckQuick(c),
     }));
-    updateChecks(checks);
-    renderChecklist(solutionProgress(state.level, state.doneSteps, state.traces));
-    const g = document.getElementById('golf');
-    if (g) g.textContent = `${golfScore(state.traces)} / par ${state.level.par}`;
 
     // Progressive hints: reveal after commands without new progress
     const met = checks.filter((c) => c.ok).length;
-    if (line.trim() && line.trim() !== 'undo') {
+    if (raw && raw !== 'undo') {
       if (met === state._lastMet) state.idleCommands += 1;
       else state.idleCommands = 0;
       state._lastMet = met;
       maybeRevealHint(term);
     }
 
-    if (line.trim() !== 'undo' && !state.level._solved) {
+    if (raw !== 'undo' && !state.level._solved) {
       const { ok } = checkLevel(state.level, state.shell, state.traces);
       if (ok) onLevelSolved(term);
     }
   }
 
-  // Cursor stays in the input after every command.
-  term.focus();
+  // Cursor stays in the input after every command unless modal took focus
+  if (!document.querySelector('.overlay .modal')) {
+    term.focus();
+  }
 }
 
 function runCheckQuick(check) {
@@ -512,24 +490,29 @@ function maybeRevealHint(term) {
   term.print(`Hint ${state.hintIdx}/${hints.length}: ${hint}`, 'warn');
 }
 
+function showHint(term) {
+  if (!state.level) {
+    term.print(t().noHintSandbox, 'warn');
+    return;
+  }
+  term.print(`Hint: ${state.level.hint}`, 'warn');
+  const hints = state.level.hints ?? [];
+  if (hints.length && state.hintIdx < hints.length) {
+    const deeper = hints[state.hintIdx];
+    state.hintIdx += 1;
+    term.print(`Deep hint (${state.hintIdx}/${hints.length}): ${deeper}`, 'warn');
+  }
+}
+
 function doReset(term) {
   state.shell.resetTo(state.seed);
   state.traces = [];
   state.doneSteps = new Set();
   state.offered = false;
   term.clear();
-  term.print('Reset.');
+  term.print(t().resetDone || 'Reset.');
   term.setPrompt(state.shell.prompt());
   renderAll();
-  renderChecklist(
-    state.level ? solutionProgress(state.level, state.doneSteps, state.traces) : []
-  );
-  updateChecks(state.level ? state.level.checks.map((c) => ({ ...c, ok: false })) : []);
-  const g = document.getElementById('golf');
-  if (g) {
-    g.textContent =
-      state.mode === 'level' && state.level ? `0 / par ${state.level.par}` : '';
-  }
   term.focus();
 }
 
@@ -544,13 +527,17 @@ function onLevelSolved(term) {
     at: Date.now(),
   };
   saveProgress(state.solved);
+  const u = t();
   term.print('');
-  term.print(`Level complete. ${score} command(s) · par ${par}`, 'ok');
-  if (score < par) term.print('Under par.', 'ok');
-  if (score === par) term.print('Matched par.', 'ok');
-  if (score > par) term.print('Over par — try again for a tighter run.', 'warn');
+  term.print(`${u.levelSolvedBanner || 'Level complete:'} ${state.level.title}`, 'ok');
+  term.print(
+    score > 0
+      ? u.commandsUsed(score, par)
+      : u.idealCommands(par),
+    'ok'
+  );
   state.level = { ...state.level, _solved: true };
-  renderChecklist(solutionProgress(state.level, state.doneSteps, state.traces));
+  renderDock();
   maybeOfferNext();
 }
 
@@ -561,7 +548,7 @@ function maybeOfferNext() {
   const level = state.level;
   const idx = LEVELS.findIndex((l) => l.id === level.id);
   const next = LEVELS[idx + 1];
-  const cmds = golfScore(state.traces);
+  const cmds = golfScore(state.traces) || null;
   const curriculum = summarizeCurriculum(state.solved);
   const share = buildShareTargets({
     levelName: level.title,
@@ -570,83 +557,88 @@ function maybeOfferNext() {
     par: level.par,
     curriculum,
   });
+  const total = LEVELS.length;
+  const solvedCount = curriculum.solvedCount;
+  const underPar = cmds !== null && cmds <= level.par;
+  const u = t();
+  const golfLine =
+    cmds === null
+      ? u.idealForLevel(level.par)
+      : underPar
+        ? `**${cmds}** ${u.idealForLevelShort(level.par)}`
+        : `**${cmds}** command${cmds === 1 ? '' : 's'}. Ideal is ${level.par}. Still counts — you got there.`;
 
-  const cheers = [
+  const cheers = u.cheers || [
     'Clean run. The model in your head just got sharper.',
     'That is not memorization — that is the shell making sense.',
     'Level cleared. You can explain this now, not just type it.',
   ];
-  const cheer = cheers[(Math.random() * cheers.length) | 0];
+  const cheer = cheers[Math.floor(Math.random() * cheers.length)];
 
   const learnedPreview = curriculum.learned
     .map((l) => `<li>${escapeHtml(l.seriesTitle)}: ${escapeHtml(l.name)}</li>`)
     .join('');
 
-  const golfLine =
-    cmds <= level.par
-      ? `**${cmds}** command(s). Ideal is ${level.par}.`
-      : `**${cmds}** command(s). Ideal is ${level.par}. Still counts — you got there.`;
-
-  document.getElementById('modal-title').textContent = 'Level complete';
-  document.getElementById('modal-body').innerHTML = `
+  const bodyHtml = `
     <div class="celebrate" aria-live="polite">
       <div class="celebrate-visual" aria-hidden="true">
         <div class="celebrate-ring"></div>
         <div class="celebrate-star">★</div>
       </div>
-      <div class="celebrate-badge">LEVEL CLEARED</div>
+      <div class="celebrate-badge">${escapeHtml(u.levelCleared || 'LEVEL CLEARED')}</div>
       <h3 class="celebrate-title">${escapeHtml(level.title)}</h3>
       <p class="celebrate-sub">${escapeHtml(level.series)} · <code>${escapeHtml(level.id)}</code></p>
       <p class="celebrate-cheer">${escapeHtml(cheer)}</p>
-      <div class="celebrate-stats">${golfLine}</div>
+      <div class="celebrate-stats">${renderMarkdown(golfLine)}</div>
       <div class="celebrate-progress">
         <div class="prog-track"><div class="prog-fill" style="width:${curriculum.percent}%"></div></div>
-        <div class="par-note">${curriculum.solvedCount} / ${curriculum.total} levels solved · progress saved in this browser</div>
+        <div class="par-note">${solvedCount} / ${total} ${escapeHtml(u.progressLevels ? u.progressLevels(solvedCount, total) : 'levels solved · progress saved in this browser')}</div>
       </div>
       <div class="share-block">
-        <div class="next-title">${escapeHtml(COPY.shareTitle)}</div>
+        <div class="next-title">${escapeHtml(u.shareTitle)}</div>
         <div class="learned-preview">
-          <ul>${learnedPreview || '<li>Solve more levels to build your curriculum list.</li>'}</ul>
+          <div class="par-note">${escapeHtml(u.styleList || 'Skills unlocked:')}</div>
+          <ul>${learnedPreview || `<li>${escapeHtml(u.solveMoreLevels || 'Solve more levels to unlock')}</li>`}</ul>
         </div>
-        <div class="share-row" role="group" aria-label="${escapeHtml(COPY.shareGroupLabel)}">
-          <button type="button" class="share-btn linkedin" data-share="linkedin">${escapeHtml(COPY.linkedin)}</button>
-          <button type="button" class="share-btn x" data-share="x">${escapeHtml(COPY.xTwitter)}</button>
-          <button type="button" class="share-btn facebook" data-share="facebook">${escapeHtml(COPY.facebook)}</button>
-          <button type="button" class="share-btn copy" data-share="copy">${escapeHtml(COPY.copyPost)}</button>
+        <div class="share-row" role="group" aria-label="${escapeHtml(u.shareGroupLabel || 'Share progress')}">
+          <button type="button" class="share-btn linkedin" data-share="linkedin">${escapeHtml(u.linkedin)}</button>
+          <button type="button" class="share-btn x" data-share="x">${escapeHtml(u.xTwitter)}</button>
+          <button type="button" class="share-btn facebook" data-share="facebook">${escapeHtml(u.facebook)}</button>
+          <button type="button" class="share-btn copy" data-share="copy">${escapeHtml(u.copyPost)}</button>
         </div>
         <div class="share-status" data-share-status hidden></div>
       </div>
-      <div class="celebrate-next">${
+      ${
         next
-          ? `Next: <strong>${escapeHtml(next.title)}</strong> — <code>${escapeHtml(
-              (next.solution ?? [])[0]?.command ?? ''
-            )}</code>`
-          : 'You cleared every level in the pack.'
-      }</div>
+          ? `<div class="celebrate-next">${renderMarkdown(u.nextCelebration(next.id, next.title))}</div>`
+          : `<div class="celebrate-next">${renderMarkdown(u.lastInPack)}</div>`
+      }
     </div>
   `;
 
-  const actions = [];
-  actions.push({
-    label: 'Bask in it',
-    className: 'ghost',
-    onClick: () => {
-      state.offered = false;
-      term.focus();
+  const actions = [
+    {
+      label: u.baskInIt,
+      className: 'ghost',
+      onClick: () => {
+        state.offered = false;
+        termRef?.focus();
+      },
     },
-  });
+  ];
+
   if (next) {
     actions.push({
-      label: `On to ${next.id}`,
+      label: u.celebrateOn(next.id),
       className: 'primary',
       onClick: () => {
         state.offered = false;
-        startLevel(next.id, term);
+        startLevel(next.id, termRef);
       },
     });
   } else {
     actions.push({
-      label: 'Browse levels',
+      label: u.browseLevels,
       className: 'primary',
       onClick: () => {
         state.offered = false;
@@ -655,46 +647,46 @@ function maybeOfferNext() {
     });
   }
 
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   const confetti = launchConfetti(4800);
   playFanfare();
 
-  const body = document.getElementById('modal-body');
-  const foot = document.createElement('div');
-  foot.className = 'win-actions';
-  for (const a of actions) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = `btn ${a.className === 'primary' ? 'primary' : ''}`.trim();
-    btn.textContent = a.label;
-    btn.addEventListener('click', () => {
-      confetti.stop();
-      closeModal();
-      a.onClick();
-    });
-    foot.appendChild(btn);
-  }
-  body.appendChild(foot);
+  const modal = showModal({
+    title: u.levelComplete,
+    bodyHtml,
+    variant: 'celebrate',
+    actions: actions.map((a) => ({
+      ...a,
+      onClick: () => {
+        confetti?.stop();
+        modal.close();
+        a.onClick();
+      },
+    })),
+    onClose: () => {
+      confetti?.stop();
+      state.offered = false;
+      termRef?.focus();
+    },
+  });
 
-  const modal = document.getElementById('modal');
-  modal.classList.remove('hidden');
-
-  body.querySelectorAll('[data-share]').forEach((btn) => {
+  modal.el.querySelectorAll('[data-share]').forEach((btn) => {
     btn.addEventListener('click', async (ev) => {
       ev.preventDefault();
-      const kind = btn.getAttribute('data-share');
-      const status = body.querySelector('[data-share-status]');
+      const kind = btn.getAttribute('data-share') ?? 'copy';
+      const status = modal.el.querySelector('[data-share-status]');
       const result = await shareWithClipboard(kind, share);
       if (!status) return;
       status.hidden = false;
       if (kind === 'copy') {
-        status.textContent = result.copied ? COPY.copyOk : COPY.copyFail;
+        status.textContent = result.copied ? u.copyOk : u.copyFail;
         return;
       }
-      status.textContent = result.copied ? COPY.shareCopied : COPY.shareOpened;
+      status.textContent = result.copied ? u.shareCopied : u.shareOpened;
     });
   });
 
-  modal.addEventListener('keydown', (ev) => {
+  modal.el.querySelector('.modal')?.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') {
       ev.preventDefault();
       ev.stopPropagation();
@@ -712,153 +704,237 @@ function renderAll(lastTrace = null) {
   );
   const stages = lastTrace?.stages ?? [];
   renderPipeline(document.getElementById('pipe-svg'), stages, { width: 520 });
+
+  const meta = document.getElementById('level-title');
+  if (meta) {
+    meta.textContent = state.level
+      ? `${state.level.series} · ${state.level.title} · ${t().parShort} ${state.level.par}`
+      : t().sandboxTitle;
+  }
+
+  renderDock();
+  syncTerminalHints();
 }
 
-function setHeader(mode, title) {
-  const el = document.getElementById('level-title');
-  if (el) el.textContent = `${mode} · ${title}`;
+function syncTerminalHints() {
+  if (!termRef) return;
+  if (!state.level) {
+    termRef.setHint('ls -la');
+    termRef.setExtraCompletions([]);
+    return;
+  }
+  const steps = solutionProgress(state.level, state.doneSteps, state.traces);
+  const next = steps.find((s) => s.isCurrent);
+  termRef.setHint(next?.command ?? null);
+  termRef.setExtraCompletions([
+    ...(state.level.solution ?? []).map((s) => s.command),
+    ...(state.level.hint ? state.level.hint.split(';').map((s) => s.trim()).filter(Boolean) : []),
+  ]);
 }
 
-function setGoal(text) {
-  document.getElementById('goal-text').textContent = text;
-}
+function renderDock() {
+  const dockEl = document.getElementById('dock');
+  if (!dockEl) return;
+  const u = t();
 
-function showGoal(term) {
-  const text =
-    state.mode === 'level' && state.level
-      ? `${state.level.brief}\nHint: ${state.level.hint}`
-      : 'Explore freely. Type `levels` for lessons.';
-  if (state.mode === 'level' && state.level) setGoal(state.level.brief);
-  term.print(text);
-}
-
-function renderLesson(level) {
-  const el = document.getElementById('lesson-panel');
-  if (!level) {
-    el.innerHTML = `
-      <div class="pane-label">Learning guide</div>
-      <p class="objective">Free sandbox. Explore cwd, files, and pipes — the tree and pipeline diagrams update live.</p>
+  if (!state.level) {
+    dockEl.innerHTML = `
+      <h2>${escapeHtml(u.learningGuide)}</h2>
+      <p class="objective">${escapeHtml(u.guideAlwaysOn)}</p>
       <div class="learning-box">
-        <div class="next-title">Start here</div>
+        <div class="next-title">${escapeHtml(u.startHere)}</div>
         <ul>
-          <li>Type <code>levels</code> to open the curriculum</li>
-          <li>Tab completes one word · ↑/↓ browses history</li>
-          <li><code>undo</code> / <code>reset</code> recover state</li>
+          ${u.startHereItems.map((item) => `<li>${renderMarkdown(item)}</li>`).join('')}
         </ul>
       </div>
+      <div class="learning-box">
+        <div class="next-title">${escapeHtml(u.sandboxTip)}</div>
+        <ul>
+          ${u.sandboxTipItems.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+        </ul>
+      </div>
+      <ul class="goal-list">
+        <li class="met">
+          <div class="g-label">${escapeHtml(u.noActiveLevel)}</div>
+          <div class="g-detail">${escapeHtml(u.noActiveLevelDetail)}</div>
+        </li>
+      </ul>
+      <div class="par-note">${u.guideFlashNote}</div>
     `;
     return;
   }
-  el.innerHTML = `
-    <div class="pane-label">What is happening</div>
-    <h2 class="lesson-title">${escapeHtml(level.title)}</h2>
+
+  const level = state.level;
+  const steps = solutionProgress(level, state.doneSteps, state.traces);
+  const currentStep = steps.find((s) => s.isCurrent);
+  const solved = Boolean(level._solved);
+
+  const items = steps.map((s) => {
+    return `<li class="${s.done ? 'met' : ''}${s.isCurrent ? ' current' : ''}">
+      <div class="g-label" dir="ltr">${s.done ? '✓' : s.isCurrent ? '▶' : '○'} <code>${escapeHtml(s.command)}</code>${
+        s.isCurrent ? ` <span class="chip current-chip">${escapeHtml(u.nowChip)}</span>` : ''
+      }</div>
+      <div class="g-detail" dir="ltr">${escapeHtml(s.note)}</div>
+    </li>`;
+  });
+
+  const nextBlock = solved
+    ? `<div class="next-box met">${escapeHtml(u.allSolutionMet)}</div>`
+    : `<div class="next-box">
+        <div class="next-title">${escapeHtml(u.typeNextTitle)}</div>
+        <div class="next-row"><span class="g-label">${escapeHtml(u.remainingLabel)}</span>${
+          currentStep ? `<code class="g-cmd">${escapeHtml(currentStep.command)}</code>` : ''
+        }</div>
+        <div class="par-note">${escapeHtml(u.wrongCommandNote)}</div>
+      </div>`;
+
+  const prog = state.solved[level.id];
+  const golfNote =
+    prog?.bestCommands !== undefined
+      ? u.bestSoFar(prog.bestCommands, level.par)
+      : u.idealSolution(level.par);
+
+  dockEl.innerHTML = `
+    <h2>${escapeHtml(level.title)}</h2>
     <p class="objective">${escapeHtml(level.objective)}</p>
-    <div class="teach-box">${level.teach}</div>
     ${
       level.learning?.length
         ? `<div class="learning-box">
-            <div class="next-title">You are learning</div>
+            <div class="next-title">${escapeHtml(u.youAreLearning)}</div>
             <ul>${level.learning.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>
           </div>`
         : ''
     }
-  `;
-  // teach contains intentional **bold** and `code` — light markdown
-  const teach = el.querySelector('.teach-box');
-  if (teach) {
-    teach.innerHTML = String(level.teach)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>');
-  }
-}
-
-function renderChecklist(steps) {
-  const el = document.getElementById('checklist');
-  if (!steps.length) {
-    el.innerHTML = `<div class="par-note">No active level — open <code>levels</code> for guided steps.</div>`;
-    return;
-  }
-  const current = steps.find((s) => s.isCurrent);
-  el.innerHTML = `
     ${
-      current
-        ? `<div class="next-box">
-            <div class="next-title">Type next — highlighted in orange</div>
-            <div class="next-row"><code class="g-cmd">${escapeHtml(current.command)}</code></div>
-            <div class="par-note">Tab fills one word at a time.</div>
+      level.fieldNotes?.length
+        ? `<div class="field-box">
+            <div class="next-title">${escapeHtml(u.fieldNotesTitle)}</div>
+            <ul>${level.fieldNotes.map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>
           </div>`
-        : `<div class="next-box met">All solution steps done.</div>`
+        : ''
     }
-    <ul class="goal-list">
-      ${steps
-        .map(
-          (s) => `<li class="${s.done ? 'met' : ''}${s.isCurrent ? ' current' : ''}">
-          <div class="g-label" dir="ltr">${s.done ? '✓' : s.isCurrent ? '▶' : '○'} <code>${escapeHtml(
-            s.command
-          )}</code>${s.isCurrent ? ' <span class="chip current-chip">now</span>' : ''}</div>
-          <div class="g-detail" dir="ltr">${escapeHtml(s.note)}</div>
-        </li>`
-        )
-        .join('')}
-    </ul>
+    <div class="par-note">${escapeHtml(golfNote)}</div>
+    ${solved ? `<div class="solved-banner">${escapeHtml(u.solvedBanner(golfScore(state.traces) || null))}</div>` : ''}
+    ${nextBlock}
+    <ul class="goal-list">${items.join('')}</ul>
+    ${
+      level.transfer
+        ? `<div class="par-note"><strong>${escapeHtml(u.transferTitle || 'Transfer')}:</strong> ${escapeHtml(level.transfer)}</div>`
+        : ''
+    }
   `;
 }
 
-function updateChecks(checks) {
-  const el = document.getElementById('checks');
-  if (!el) return;
-  if (!checks.length) {
-    el.innerHTML = '';
+function replayLesson(term) {
+  if (!state.level) {
+    term.print(t().noActiveLevel, 'warn');
     return;
   }
-  el.innerHTML = checks
-    .map(
-      (c) =>
-        `<div class="check ${c.ok ? 'ok' : 'pending'}">${c.ok ? '✓' : '○'} ${escapeHtml(
-          checkLabel(c)
-        )}</div>`
-    )
-    .join('');
+  showLevelDialog(state.level);
 }
 
-function checkLabel(c) {
-  switch (c.type) {
-    case 'cwd_is':
-      return `cwd = ${c.value}`;
-    case 'file_exists':
-      return `file ${c.value}`;
-    case 'dir_exists':
-      return `dir ${c.value}`;
-    case 'file_missing':
-      return `no ${c.value}`;
-    case 'file_contains':
-      return `${c.path} contains "${c.value}"`;
-    case 'last_stdout_contains':
-      return `output has "${c.value}"`;
-    case 'last_stdout_not_contains':
-      return `output lacks "${c.value}"`;
-    case 'last_stdout_matches':
-      return `output matches /${c.value}/`;
-    case 'cmd_used':
-      return `use ${c.value}`;
-    case 'op_used':
-      return `use \`${c.value}\``;
-    default:
-      return c.type;
+function showLevelDialog(level) {
+  const u = t();
+  const md = [
+    `### ${level.title}`,
+    '',
+    level.objective,
+    '',
+    level.brief,
+    '',
+    '```',
+    level.teach,
+    '```',
+    '',
+    level.transfer ? `**${u.transferTitle || 'Transfer'}:** ${level.transfer}` : '',
+    `**${u.hint}:** ${level.hint}`,
+    '',
+    `*${u.idealSolution(level.par)}*`,
+  ].filter(Boolean).join('\n');
+
+  showModal({
+    title: level.title,
+    bodyHtml: renderMarkdown(md),
+    actions: [
+      {
+        label: u.startLevel || u.close,
+        className: 'primary',
+        onClick: () => termRef?.focus(),
+      },
+    ],
+    onClose: () => termRef?.focus(),
+  });
+}
+
+function showSolution(term) {
+  if (!state.level) {
+    term.print(t().noSolutionSandbox, 'warn');
+    return;
   }
+  const cmds = (state.level.solution ?? []).map((s) => s.command);
+  const u = t();
+  showModal({
+    title: u.solutionTitle(state.level.id),
+    bodyHtml: renderMarkdown(
+      [
+        u.solutionCommands,
+        '',
+        '```',
+        cmds.join('\n'),
+        '```',
+        '',
+        u.solutionWarn,
+      ].join('\n'),
+    ),
+    actions: [
+      { label: u.cancel, className: 'ghost', onClick: () => term.focus() },
+      {
+        label: u.runSolution,
+        className: 'primary',
+        onClick: () => {
+          doReset(term);
+          for (const c of cmds) {
+            handleLine(c, term);
+          }
+          term.focus();
+        },
+      },
+    ],
+    onClose: () => term.focus(),
+  });
+}
+
+function showHelp(term) {
+  const u = t();
+  const bodyHtml = `
+    <div class="ui-help">
+      <p>${escapeHtml(u.uiHelpIntro || 'LearnBash is an interactive terminal laboratory with visual filesystem and pipeline representations.')}</p>
+      <ul>
+        <li><strong>${escapeHtml(u.levels)}:</strong> ${escapeHtml(u.levelsTitle || 'Curriculum browser with 38 levels')}</li>
+        <li><strong>${escapeHtml(u.lesson)}:</strong> ${escapeHtml(u.lessonTitle || 'Replay lesson introduction')}</li>
+        <li><strong>${escapeHtml(u.guide)}:</strong> ${escapeHtml(u.guideAlwaysOn || 'Always-on guide with field notes & checklist')}</li>
+        <li><strong>${escapeHtml(u.hint)}:</strong> ${escapeHtml(u.hint || 'Hints for the current challenge')}</li>
+        <li><strong>${escapeHtml(u.solution)}:</strong> ${escapeHtml(u.solution || 'View ideal solution & run automatically')}</li>
+        <li><strong>${escapeHtml(u.undo)} / ${escapeHtml(u.reset)}:</strong> ${escapeHtml(u.undo || 'Recover previous state')}</li>
+        <li><strong>${escapeHtml(u.sandboxBtn)}:</strong> ${escapeHtml(u.modeSandbox || 'Free exploration sandbox')}</li>
+      </ul>
+      <p><em>${escapeHtml(u.helpCommands || 'Type help, levels, hint, solution in terminal anytime.')}</em></p>
+    </div>
+  `;
+  showModal({
+    title: u.uiGuideTitle || u.help,
+    bodyHtml,
+    actions: [{ label: u.close, className: 'ghost', onClick: () => term.focus() }],
+    onClose: () => term.focus(),
+  });
 }
 
 function openLevels() {
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modal-body');
-  document.getElementById('modal-title').textContent = 'Levels';
+  const u = t();
   const groups = levelSeries();
-  body.innerHTML = groups
+  const body = groups
     .map((g) => {
-      const items = g.levels
+      const rows = g.levels
         .map((l) => {
           const done = state.solved[l.id];
           const isChk = l.series === 'Checkpoints' || l.id.startsWith('chk-');
@@ -866,52 +942,41 @@ function openLevels() {
           if (isChk && !done?.solved) {
             const base = l.id.replace(/^chk-/, '');
             const map = { basics: 'Basics', streams: 'Streams' };
-            const series = map[base] ?? l.series;
+            const seriesName = map[base] ?? l.series;
             const peers = LEVELS.filter(
-              (x) => x.series === series && !x.id.startsWith('chk-')
+              (x) => x.series === seriesName && !x.id.startsWith('chk-')
             );
             locked = peers.length > 0 && !peers.every((p) => state.solved[p.id]?.solved);
           }
-          const mark = done?.solved ? `✓ ${done.bestCommands}/${l.par}` : locked ? 'locked' : '';
-          return `<button type="button" class="level-row" data-id="${l.id}" ${locked ? 'disabled' : ''}>
-            <span class="level-row-title">${escapeHtml(l.title)}${locked ? ' 🔒' : ''}</span>
-            <span class="level-row-meta">${escapeHtml(g.series)} · par ${l.par} ${mark}</span>
+          return `<button type="button" class="level-row ${done?.solved ? 'solved' : ''}" data-level="${l.id}" ${locked ? 'disabled' : ''}>
+            <span class="id">${l.id}</span>
+            <span class="name">${escapeHtml(l.title)}</span>
+            <span class="par-note">ideal ${l.par} cmd${l.par === 1 ? '' : 's'}</span>
+            <span class="chip ${done?.solved ? 'ok' : ''}" title="${escapeHtml(u.difficultyOf ? u.difficultyOf(l.difficulty ?? 2) : '')}">
+              ${done?.solved ? `${escapeHtml(u.solvedLabel || 'Solved')} ${done.bestCommands ?? ''}` : locked ? '🔒' : `par ${l.par}`}
+            </span>
           </button>`;
         })
         .join('');
-      return `<section class="level-group"><h3>${escapeHtml(g.series)}</h3>${items}</section>`;
+      return `<div class="series-block"><h3>${escapeHtml(g.series)}</h3><div class="level-list">${rows}</div></div>`;
     })
     .join('');
 
-  body.querySelectorAll('.level-row').forEach((btn) => {
+  const modal = showModal({
+    title: u.levelsTitle || u.levels,
+    bodyHtml: `<p>${escapeHtml(u.pickChallenge || 'Select a challenge to start learning:')}</p><div class="levels-container">${body}</div>`,
+    actions: [{ label: u.close, className: 'ghost', onClick: () => modal.close() }],
+    onClose: () => termRef?.focus(),
+  });
+
+  modal.el.querySelectorAll('[data-level]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      closeModal();
-      startLevel(btn.getAttribute('data-id'), getTerm());
+      const id = btn.getAttribute('data-level');
+      if (!id) return;
+      modal.close();
+      startLevel(id, termRef);
     });
   });
-  modal.classList.remove('hidden');
-}
-
-function showLevelDialog(level) {
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modal-body');
-  document.getElementById('modal-title').textContent = level.title;
-  body.innerHTML = `
-    <p class="brief">${escapeHtml(level.objective)}</p>
-    <p class="brief">${escapeHtml(level.brief)}</p>
-    <div class="teach-box">${escapeHtml(level.teach)
-      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')}</div>
-    ${level.transfer ? `<p class="hint">Transfer: ${escapeHtml(level.transfer)}</p>` : ''}
-    <p class="hint">Hint: ${escapeHtml(level.hint)}</p>
-    <p class="par">Par: ${level.par} command(s)${level.hints?.length ? ` · ${level.hints.length} deeper hints if you get stuck` : ''}</p>
-  `;
-  modal.classList.remove('hidden');
-  getTerm()?.focus?.();
-}
-
-function closeModal() {
-  document.getElementById('modal')?.classList.add('hidden');
 }
 
 /**
@@ -926,39 +991,36 @@ function openQuiz(term, mode) {
     openPredict(term);
     return;
   }
+  const u = t();
   const items =
     mode === 'review'
       ? sampleLeitner(state.leitner, 3, state.level?.series ?? null)
       : quizForSeries(state.level?.series ?? '*').slice(0, 3);
 
   if (!items.length) {
-    term.print('No quiz items yet. Finish a level series first.');
+    term.print(u.noQuizItems || 'No quiz items yet. Finish a level series first.', 'warn');
     term.focus();
     return;
   }
 
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modal-body');
-  document.getElementById('modal-title').textContent =
-    mode === 'review' ? 'Spaced review' : 'Concept quiz';
-
   let idx = 0;
   let score = 0;
+  let currentModal = null;
 
-  const render = () => {
+  const renderCurrent = () => {
     const item = items[idx];
-    body.innerHTML = `
+    const choicesHtml = item.choices
+      .map(
+        (c, i) =>
+          `<button type="button" class="level-row quiz-choice" data-i="${i}">
+            <span class="level-row-title">${escapeHtml(c)}</span>
+          </button>`
+      )
+      .join('');
+
+    const bodyHtml = `
       <p class="brief">${escapeHtml(item.prompt)}</p>
-      <div class="quiz-choices">
-        ${item.choices
-          .map(
-            (c, i) =>
-              `<button type="button" class="level-row quiz-choice" data-i="${i}">
-                <span class="level-row-title">${escapeHtml(c)}</span>
-              </button>`
-          )
-          .join('')}
-      </div>
+      <div class="quiz-choices">${choicesHtml}</div>
       <p class="par">Confidence: pick how sure you are after choosing</p>
       <div class="share-row" role="group" aria-label="confidence">
         <button type="button" class="btn conf" data-c="1">1 guess</button>
@@ -968,6 +1030,16 @@ function openQuiz(term, mode) {
       <div class="share-status quiz-feedback" data-quiz-feedback hidden></div>
       <p class="par">Question ${idx + 1} / ${items.length} · score ${score}</p>
     `;
+
+    if (currentModal) currentModal.close();
+    currentModal = showModal({
+      title: mode === 'review' ? (u.reviewTitle || 'Spaced review') : (u.quizTitle || 'Concept quiz'),
+      bodyHtml,
+      actions: [{ label: u.close, className: 'ghost', onClick: () => currentModal.close() }],
+      onClose: () => term.focus(),
+    });
+
+    const body = currentModal.el;
     let confidence = 2;
     body.querySelectorAll('.conf').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -977,6 +1049,7 @@ function openQuiz(term, mode) {
         });
       });
     });
+
     body.querySelectorAll('.quiz-choice').forEach((btn) => {
       btn.addEventListener('click', () => {
         const pick = Number(btn.getAttribute('data-i'));
@@ -984,10 +1057,12 @@ function openQuiz(term, mode) {
         saveLeitner(state.leitner);
         if (g.ok) score += 1;
         const fb = body.querySelector('[data-quiz-feedback]');
-        fb.hidden = false;
-        fb.textContent = g.ok
-          ? `Correct. ${g.why}`
-          : `Not quite. ${g.misconception}: ${g.coach}`;
+        if (fb) {
+          fb.hidden = false;
+          fb.textContent = g.ok
+            ? `Correct. ${g.why}`
+            : `Not quite. ${g.misconception}: ${g.coach}`;
+        }
         body.querySelectorAll('.quiz-choice').forEach((b) => {
           b.disabled = true;
           if (Number(b.getAttribute('data-i')) === item.answer) {
@@ -996,36 +1071,39 @@ function openQuiz(term, mode) {
         });
         setTimeout(() => {
           idx += 1;
-          if (idx < items.length) render();
-          else {
-            body.innerHTML = `
-              <p class="brief">Quiz done — ${score} / ${items.length}.</p>
-              <p class="hint">${
-                score === items.length
-                  ? 'Solid understanding, not just commands.'
-                  : 'Weak items moved to Leitner box 1 — Review will resurface them.'
-              }</p>
-            `;
-            const foot = document.createElement('div');
-            foot.className = 'win-actions';
-            const close = document.createElement('button');
-            close.type = 'button';
-            close.className = 'btn primary';
-            close.textContent = 'Back to terminal';
-            close.addEventListener('click', () => {
-              closeModal();
-              term.focus();
+          if (idx < items.length) {
+            renderCurrent();
+          } else {
+            if (currentModal) currentModal.close();
+            currentModal = showModal({
+              title: u.quizDone || 'Quiz complete',
+              bodyHtml: `
+                <p class="brief">Quiz done — ${score} / ${items.length}.</p>
+                <p class="hint">${
+                  score === items.length
+                    ? 'Solid understanding, not just commands.'
+                    : 'Weak items moved to Leitner box 1 — Review will resurface them.'
+                }</p>
+              `,
+              actions: [
+                {
+                  label: u.backToTerminal || 'Back to terminal',
+                  className: 'primary',
+                  onClick: () => {
+                    currentModal.close();
+                    term.focus();
+                  },
+                },
+              ],
+              onClose: () => term.focus(),
             });
-            foot.appendChild(close);
-            body.appendChild(foot);
           }
         }, 1400);
       });
     });
   };
 
-  render();
-  modal.classList.remove('hidden');
+  renderCurrent();
 }
 
 /**
@@ -1036,31 +1114,40 @@ function openQuiz(term, mode) {
  */
 function openPredict(term) {
   const task = PREDICTS[(Math.random() * PREDICTS.length) | 0];
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modal-body');
-  document.getElementById('modal-title').textContent = 'Predict, then run';
-  body.innerHTML = `
+  const u = t();
+  const choicesHtml = task.choices
+    .map(
+      (c, i) =>
+        `<button type="button" class="level-row quiz-choice" data-i="${i}">
+          <span class="level-row-title">${escapeHtml(c)}</span>
+        </button>`
+    )
+    .join('');
+
+  const bodyHtml = `
     <p class="brief">${escapeHtml(task.prompt)}</p>
     <p class="par"><code>${escapeHtml(task.command)}</code></p>
-    <div class="quiz-choices">
-      ${task.choices
-        .map(
-          (c, i) =>
-            `<button type="button" class="level-row quiz-choice" data-i="${i}">
-              <span class="level-row-title">${escapeHtml(c)}</span>
-            </button>`
-        )
-        .join('')}
-    </div>
+    <div class="quiz-choices">${choicesHtml}</div>
     <div class="share-status quiz-feedback" data-quiz-feedback hidden></div>
   `;
+
+  const modal = showModal({
+    title: u.predictTitle || 'Predict, then run',
+    bodyHtml,
+    actions: [{ label: u.close, className: 'ghost', onClick: () => modal.close() }],
+    onClose: () => term.focus(),
+  });
+
+  const body = modal.el;
   body.querySelectorAll('.quiz-choice').forEach((btn) => {
     btn.addEventListener('click', () => {
       const pick = Number(btn.getAttribute('data-i'));
       const g = gradePredict(task, pick);
       const fb = body.querySelector('[data-quiz-feedback]');
-      fb.hidden = false;
-      fb.textContent = g.ok ? `Correct. ${g.why}` : `Not quite. ${g.why}`;
+      if (fb) {
+        fb.hidden = false;
+        fb.textContent = g.ok ? `Correct. ${g.why}` : `Not quite. ${g.why}`;
+      }
       body.querySelectorAll('.quiz-choice').forEach((b) => {
         b.disabled = true;
         if (Number(b.getAttribute('data-i')) === task.answer) {
@@ -1068,13 +1155,12 @@ function openPredict(term) {
         }
       });
       setTimeout(() => {
-        closeModal();
+        modal.close();
         term.print(`# verify: ${task.command}`, 'warn');
         term.focus();
       }, 1600);
     });
   });
-  modal.classList.remove('hidden');
 }
 
 /**
@@ -1087,16 +1173,13 @@ function openPredict(term) {
 export function openInventory(term, variant) {
   const items = conceptInventory(variant);
   const answers = {};
-  const modal = document.getElementById('modal');
-  const body = document.getElementById('modal-body');
-  document.getElementById('modal-title').textContent =
-    variant === 'pre' ? 'Pre-test inventory' : 'Post-test inventory';
+  const u = t();
   let idx = 0;
+  let currentModal = null;
 
   const finish = () => {
     const sc = scoreInventory(items, answers);
     const pct = Math.round((sc.score / sc.total) * 100);
-    // Persist to study log (anonymous)
     if (!state.studyPid) {
       state.studyPid = 'P' + Math.random().toString(36).slice(2, 8).toUpperCase();
       try {
@@ -1113,96 +1196,86 @@ export function openInventory(term, variant) {
     const stage = retentionDue(rec) && rec.post ? 'retention' : variant;
     recordInventory(rec, stage, items, answers);
     saveStudy(state.study);
-    body.innerHTML = `
-      <p class="brief">Inventory score: <strong>${sc.score}/${sc.total}</strong> (${pct}%). Stored as <code>${escapeHtml(state.studyPid)}</code> / ${escapeHtml(stage)}.</p>
-      ${
-        sc.misses.length
-          ? `<div class="learning-box"><div class="next-title">Misconceptions to repair</div><ul>${sc.misses
-              .map((m) => `<li><code>${escapeHtml(m.misconception)}</code> — ${escapeHtml(m.coach)}</li>`)
-              .join('')}</ul></div>`
-          : '<p class="hint">No misconception flags. Strong conceptual model.</p>'
-      }
-    `;
-    const foot = document.createElement('div');
-    foot.className = 'win-actions';
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'btn primary';
-    close.textContent = 'Back to terminal';
-    close.addEventListener('click', () => {
-      closeModal();
-      term.print(`Inventory ${variant}: ${sc.score}/${sc.total}`, sc.score === sc.total ? 'ok' : 'warn');
-      term.focus();
+
+    if (currentModal) currentModal.close();
+    currentModal = showModal({
+      title: variant === 'pre' ? 'Pre-test inventory' : 'Post-test inventory',
+      bodyHtml: `
+        <p class="brief">Inventory score: <strong>${sc.score}/${sc.total}</strong> (${pct}%). Stored as <code>${escapeHtml(state.studyPid)}</code> / ${escapeHtml(stage)}.</p>
+        ${
+          sc.misses.length
+            ? `<div class="learning-box"><div class="next-title">Misconceptions to repair</div><ul>${sc.misses
+                .map((m) => `<li><strong>${escapeHtml(m.key)}:</strong> ${escapeHtml(m.misconception)}</li>`)
+                .join('')}</ul></div>`
+            : '<p class="hint">No misconceptions logged. Strong mental model.</p>'
+        }
+      `,
+      actions: [
+        {
+          label: u.backToTerminal || 'Back to terminal',
+          className: 'primary',
+          onClick: () => {
+            currentModal.close();
+            term.focus();
+          },
+        },
+      ],
+      onClose: () => term.focus(),
     });
-    foot.appendChild(close);
-    body.appendChild(foot);
   };
 
-  const render = () => {
-    if (idx >= items.length) {
-      finish();
-      return;
-    }
+  const renderCurrent = () => {
     const item = items[idx];
-    body.innerHTML = `
+    const choicesHtml = item.choices
+      .map(
+        (c, i) =>
+          `<button type="button" class="level-row quiz-choice" data-i="${i}">
+            <span class="level-row-title">${escapeHtml(c)}</span>
+          </button>`
+      )
+      .join('');
+
+    const bodyHtml = `
       <p class="brief">${escapeHtml(item.prompt)}</p>
-      <div class="quiz-choices">
-        ${item.choices
-          .map(
-            (c, i) =>
-              `<button type="button" class="level-row quiz-choice" data-i="${i}">
-                <span class="level-row-title">${escapeHtml(c)}</span>
-              </button>`
-          )
-          .join('')}
-      </div>
-      <p class="par">${idx + 1} / ${items.length}</p>
+      <div class="quiz-choices">${choicesHtml}</div>
+      <p class="par">Question ${idx + 1} / ${items.length}</p>
     `;
+
+    if (currentModal) currentModal.close();
+    currentModal = showModal({
+      title: variant === 'pre' ? 'Pre-test inventory' : 'Post-test inventory',
+      bodyHtml,
+      actions: [{ label: u.close, className: 'ghost', onClick: () => currentModal.close() }],
+      onClose: () => term.focus(),
+    });
+
+    const body = currentModal.el;
     body.querySelectorAll('.quiz-choice').forEach((btn) => {
       btn.addEventListener('click', () => {
         answers[item.id] = Number(btn.getAttribute('data-i'));
         idx += 1;
-        render();
+        if (idx < items.length) renderCurrent();
+        else finish();
       });
     });
   };
 
-  render();
-  modal.classList.remove('hidden');
+  renderCurrent();
 }
 
 function loadLeitner() {
   try {
-    return { ...newLeitner(), ...JSON.parse(localStorage.getItem('learnbash.leitner') ?? '{}') };
+    const raw = localStorage.getItem('learnbash.leitner');
+    return raw ? JSON.parse(raw) : newLeitner();
   } catch {
     return newLeitner();
   }
 }
 
-function saveLeitner(state) {
+function saveLeitner(val) {
   try {
-    localStorage.setItem('learnbash.leitner', JSON.stringify(state));
+    localStorage.setItem('learnbash.leitner', JSON.stringify(val));
   } catch {
-    /* quota */
+    /* ignore */
   }
-}
-
-function solvedSeriesList() {
-  const series = new Set();
-  for (const level of LEVELS) {
-    if (state.solved[level.id]?.solved) series.add(level.series);
-  }
-  return [...series];
-}
-
-function getTerm() {
-  return termRef;
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }

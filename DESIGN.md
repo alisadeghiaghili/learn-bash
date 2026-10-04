@@ -9,12 +9,12 @@ the learner types real bash commands in a sandbox.
 Audience: developers who can open a terminal but have not internalized the
 shell model. Primary job: learn by doing, with immediate visual feedback.
 
-## Scope (MVP, mirrors LGB core loop)
+## Scope (MVP)
 
 - Sandbox mode with a prebuilt virtual home directory
 - Levels with goals, win conditions, command golf, progress
 - Live filesystem tree visualization (cwd pulse)
-- Pipeline / redirection dataflow visualization
+- Pipeline / redirection dataflow visualization (buffered stage simulation)
 - `undo`, `reset`, `levels`, `help`, `goal`
 - Safe virtual bash — never executes on the host
 
