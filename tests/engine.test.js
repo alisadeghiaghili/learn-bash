@@ -294,6 +294,24 @@ test('q-curriculum', () => {
     ],
     'prd-logging-stderr': [
       'echo "[ERROR] disk full" >&2 2> err.log',
+    ],    'cap-1-scaffold': [
+      'echo "set -euo pipefail" > sys-audit.sh',
+      'echo "TMP=$(mktemp)" >> sys-audit.sh',
+      'echo \'trap "rm -f $TMP" EXIT\' >> sys-audit.sh',
+      'chmod +x sys-audit.sh',
+    ],
+    'cap-2-pipeline': [
+      'grep 50 nginx.log | awk \'{print $6}\' | sort | uniq -c | sort -n > incidents.txt',
+    ],
+    'cap-3-hardening': [
+      'DIR="${OUTPUT_DIR:-reports}"',
+      'mkdir -p $DIR',
+      'echo "[INFO] Starting incident scan" >&2 2> audit.err',
+    ],
+    'cap-4-delivery': [
+      'mkdir -p reports',
+      'echo "AUDIT_COMPLETE: 3 incidents resolved" > reports/summary.txt',
+      'chmod 644 reports/summary.txt',
     ],
   };
 

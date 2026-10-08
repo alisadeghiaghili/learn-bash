@@ -42,9 +42,24 @@ export function tokenize(line) {
       i += 2;
       continue;
     }
+    if (ch === '&' && line[i + 1] === '>') {
+      tokens.push({ type: 'op', value: '&>' });
+      i += 2;
+      continue;
+    }
+    if (ch === '>' && line[i + 1] === '&') {
+      tokens.push({ type: 'op', value: '>&' });
+      i += 2;
+      continue;
+    }
     if (ch === '>' && line[i + 1] === '>') {
       tokens.push({ type: 'op', value: '>>' });
       i += 2;
+      continue;
+    }
+    if (ch === '&') {
+      tokens.push({ type: 'op', value: '&' });
+      i += 1;
       continue;
     }
     if (ch === '|' || ch === '>' || ch === '<' || ch === ';' || ch === '(' || ch === ')') {
@@ -265,6 +280,35 @@ export function parseLine(line) {
         expectWord = true;
         continue;
       }
+      if (tok.value === '>&' || tok.value === '&>') {
+        const next = tokens[i + 1];
+        if (!next || next.type !== 'word') throw new SyntaxError('syntax error near redirection');
+        if (
+          current.args.length &&
+          /^\d+$/.test(current.args[current.args.length - 1])
+        ) {
+          current.args.pop();
+        }
+        if (next.value === '2') {
+          current.toStderr = true;
+        } else if (next.value === '1') {
+          current.toStdout = true;
+        } else {
+          current.stdoutFile = next.value;
+          current.stderrFile = next.value;
+        }
+        i += 1;
+        expectWord = true;
+        continue;
+      }
+      if (tok.value === '&') {
+        if (current.args.length === 0) throw new SyntaxError("syntax error near `&'");
+        pushStage();
+        current = newStage();
+        connectors.push(';');
+        expectWord = true;
+        continue;
+      }
       continue;
     }
 
@@ -377,5 +421,7 @@ function newStage() {
     stdoutAppend: false,
     stderrFile: null,
     stderrAppend: false,
+    toStderr: false,
+    toStdout: false,
   };
 }

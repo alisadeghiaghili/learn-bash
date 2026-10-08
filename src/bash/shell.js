@@ -663,6 +663,13 @@ export class Shell {
         code: last.code,
       });
 
+      if (stage.toStderr) {
+        last = { ...last, stderr: (last.stderr || '') + (last.stdout || ''), stdout: '' };
+      }
+      if (stage.toStdout) {
+        last = { ...last, stdout: (last.stdout || '') + (last.stderr || ''), stderr: '' };
+      }
+
       if (stage.stdoutFile) {
         const fname = this._expandOne(stage.stdoutFile);
         this._writeFile(fname, last.stdout, stage.stdoutAppend);

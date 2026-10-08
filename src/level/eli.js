@@ -911,7 +911,36 @@ Environment sanitization: secure scripts clean \`$PATH\` and reset \`$IFS\` to d
     eli20: 'In POSIX process design, dup2(2) redirects file descriptor tables. When commands are piped (cmd1 | cmd2), only fd 1 is connected to the pipe buffer; fd 2 inherits the parent terminal. Emitting diagnostic logs to stderr prevents corruption of JSON, CSV, or binary payloads in automation pipelines.',
     eliphd: 'At the kernel syscall level, standard file descriptors 0, 1, and 2 represent distinct file description table pointers in task_struct->files. The operator >&2 translates to dup2(2, 1) for the duration of the command. Preserving pipeline hygiene via stderr isolation is fundamental to the Unix philosophy, preventing malformed telemetry from polluting consumer parser stages.',
   },
+  'cap-1-scaffold': {
+    eli5: 'Before building a tall Lego tower, you need a strong, flat baseplate that will not wobble. set -euo pipefail stops the builder if any piece falls, mktemp creates a clean desk, and trap cleans up all the mess when playtime is over!',
+    eli10: 'Real programmers do not just write commands; they write safety nets. set -euo pipefail makes your script crash immediately if there is any typo or broken pipeline so it does not cause damage. mktemp makes a temporary scratch file, and trap cleans it up automatically when the script exits.',
+    eli15: 'Defensive bash scripting begins with predictable failure modes. set -e halts execution on non-zero exit codes, -u treats unset variables as errors, and -o pipefail prevents pipeline stages from masking errors. trap EXIT implements deterministic teardown matching a try-finally block in high-level languages.',
+    eli20: 'Production SRE standard practices mandate fail-fast execution. Subprocesses run in strict execution environments to prevent partial state corruption. mktemp leverages kernel-level entropy to avoid symlink race conditions. Traps bind to POSIX EXIT pseudo-signals, ensuring idempotent garbage collection of system assets.',
+    eliphd: 'Architecturally, set -e modifies shell evaluation flags in execute_command(). The pipefail option modifies pipeline exit code aggregation: instead of returning the status of the final command, bash traverses the PIPE process list and returns the rightmost non-zero status. The trap builtin registers handlers into the shell signal table, executed via run_exit_trap() prior to process termination.',
+  },
+  'cap-2-pipeline': {
+    eli5: 'Imagine a big box of fruit with some bad apples. grep picks out only the boxes with bad apples, awk looks at the price tag, and sort | uniq -c counts how many bad apples came from each farm!',
+    eli10: 'Server logs can have millions of lines. To find why a website is broken, grep finds error status codes like 500, awk extracts the URL that broke, and sort | uniq -c counts how many times each page failed so you can fix the worst one first.',
+    eli15: 'High-throughput stream processing utilizes composable Unix filters. grep filters lines matching HTTP 5xx regex patterns. awk projects the URI column by splitting on whitespace. The pipeline sort | uniq -c | sort -n aggregates identical requests and orders them by frequency, providing instant incident telemetry without writing bespoke parsing scripts.',
+    eli20: 'Stream architectures process arbitrarily large log streams in constant memory. By streaming stdin through stdout without buffering entire datasets into RAM, Unix pipes achieve high throughput through kernel ring buffers (typically 64KB). Column extraction via awk and deduplication via uniq provide O(N log N) triage for site reliability engineering.',
+    eliphd: 'At the POSIX pipe interface, each pipeline stage (grep | awk | sort | uniq | sort) executes as a concurrent child process connected via inter-process pipes created by pipe(2). When reader processes exhaust input, SIGPIPE signals coordinate graceful pipeline termination. The token extraction and frequency sorting algorithm models map-reduce aggregation natively in userland.',
+  },
+  'cap-3-hardening': {
+    eli5: 'If someone does not tell you where to put your homework, you put it in the default folder on your desk (${OUTPUT_DIR:-reports}). And if there is an emergency, you shout it into the red walkie-talkie (>&2), not the quiet study speaker!',
+    eli10: 'You do not want your script to fail just because an environment variable was not set. ${OUTPUT_DIR:-reports} gives it a sensible fallback. And writing echo "[INFO]..." >&2 sends status messages to stderr so they do not get mixed up with real data files.',
+    eli15: 'Enterprise scripts must decouple business payloads from operational telemetry. File descriptor 1 (stdout) is reserved for parseable data, while file descriptor 2 (stderr) conveys human-readable audit messages (>&2). Using parameter expansion ${VAR:-default} ensures resilience against strict -u options.',
+    eli20: 'Production automation pipelines (CI/CD, Kubernetes CronJobs) frequently parse script outputs via structured consumers. Polluting stdout with diagnostic text breaks JSON/CSV parsers. Routing diagnostic messages to stderr and isolating destination paths via idempotent mkdir -p ensures production stability across diverse environments.',
+    eliphd: 'POSIX file descriptor semantics dictate that process standard streams are independently mutable via dup2(2). Channel separation (stdout fd 1 vs stderr fd 2) preserves UNIX filter composability. Parameter expansion ${VAR:-default} evaluates directly in the shell parser AST without triggering an eval or subshell fork, maintaining zero syscall overhead.',
+  },
+  'cap-4-delivery': {
+    eli5: 'You finished building the spaceship! Now you put the official safety certificate on the front door (AUDIT_COMPLETE) and lock the box with chmod 644 so nobody can change it without permission!',
+    eli10: 'This is the final step: running your automated tool, producing the final executive report for your team, and setting the permissions with chmod 644 so everyone can read the report, but only the creator can edit it. You have built a real-world DevOps tool!',
+    eli15: 'The delivery phase closes the operational feedback loop. The script compiles incident counts, timestamps, and health metrics into an executive audit deliverable (reports/summary.txt). Applying chmod 644 establishes the standard POSIX security posture (owner read-write, group/others read-only).',
+    eli20: 'Security auditing, SOC2 compliance, and post-mortem incident response depend on immutable, verifiable audit artifacts. Restricting permission bits protects against accidental tampering while ensuring accessibility for monitoring daemons and reporting dashboards.',
+    eliphd: 'The file mode 644 translates to octal 0644 (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH), modifying the inode i_mode bits via the chmod(2) system call. Delivery signoffs represent the culmination of Unix systems programming: defensive execution, stream transformation, and POSIX filesystem security combined into a resilient, production-ready artifact.',
+  },
 };
+
 
 
 /**

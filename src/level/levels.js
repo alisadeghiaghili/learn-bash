@@ -1712,7 +1712,375 @@ Measure with \`cat e-lines.txt\` and \`wc -l e-lines.txt\` before you call it do
       { type: 'file_mode_is', path: '/home/learner/backup.sh', value: '755' },
     ],
   },
+  {
+    id: 'proc-ps-kill',
+    series: 'Processes & Jobs',
+    title: 'Process Table & Signal Termination',
+    objective: 'Inspect running tasks with ps and terminate processes with kill.',
+    brief: 'Launch sleep in the background, check the process list with `ps`, then terminate the job with `kill %1`.',
+    teach: `In Unix, every running program is assigned a Process ID (PID).
+- \`&\`: Spawns a command into the background without blocking the terminal.
+- \`ps\`: Reports a snapshot of current active processes.
+- \`kill PID\` or \`kill %JOB\`: Sends an OS signal (SIGTERM by default) requesting the process to terminate.`,
+    learning: [
+      'ps prints active PID, terminal, and command details',
+      'kill %1 targets job IDs assigned by the current shell',
+      'SIGTERM (kill) gracefully asks a process to shut down and exit',
+    ],
+    fieldNotes: [
+      'kill -9 (SIGKILL) forcefully terminates uncooperative processes at the kernel level without cleanup',
+      'killall or pkill matches processes by name rather than PID: pkill nginx',
+      'ps aux displays all processes running across the entire operating system',
+    ],
+    transfer: 'Every Docker/Kubernetes container orchestrator relies on PID 1 signal propagation (SIGTERM then SIGKILL after grace period).',
+    hint: 'sleep 100 & then ps then kill %1',
+    par: 3,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'sleep 100 &', note: 'Spawn background sleep process' },
+      { command: 'ps', note: 'Inspect running process table' },
+      { command: 'kill %1', note: 'Terminate background job' },
+    ],
+    checks: [
+      { type: 'cmd_used', value: 'ps' },
+      { type: 'cmd_used', value: 'kill' },
+    ],
+  },
+  {
+    id: 'proc-array-advanced',
+    series: 'Processes & Jobs',
+    title: 'Dynamic Array Mutation & Iteration',
+    objective: 'Append elements to bash arrays and measure length with ${#arr[@]}.',
+    brief: 'Create array arr=(frontend backend), append devops with arr+=(devops), and output its length ${#arr[@]} into len.txt.',
+    teach: `Bash arrays can be mutated dynamically without reconstructing the whole list:
+- \`arr+=(item)\`: Appends one or more items to an existing array.
+- \`\${#arr[@]}\`: Expands to the total number of elements currently stored.
+- \`"\${arr[@]}"\`: Safely expands each element as an individually quoted word.`,
+    learning: [
+      'arr+=(val) appends items dynamically in memory',
+      '${#arr[@]} returns exact item count',
+      'Iterate over arrays with: for item in "${arr[@]}"; do ...; done',
+    ],
+    fieldNotes: [
+      'Always quote "${arr[@]}" to prevent word splitting when elements contain spaces',
+      'Associative arrays (hash maps) are declared with declare -A dict in bash 4+',
+      'Unset elements using unset arr[index] or delete entire array with unset arr',
+    ],
+    transfer: 'Deployment scripts store target clusters or hosts in arrays and iterate over them for zero-downtime rolling updates.',
+    hint: 'arr=(frontend backend) then arr+=(devops) then echo ${#arr[@]} > len.txt',
+    par: 3,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'arr=(frontend backend)', note: 'Initialize array' },
+      { command: 'arr+=(devops)', note: 'Append element' },
+      { command: 'echo ${#arr[@]} > len.txt', note: 'Emit array length' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/len.txt' },
+      { type: 'file_contains', path: '/home/learner/len.txt', value: '3' },
+    ],
+  },
+  {
+    id: 'fn-scope-local',
+    series: 'Functions & Scope',
+    title: 'Local Variable Isolation & Exit Codes',
+    objective: 'Protect global scope using local and communicate status via return.',
+    brief: 'Define a function calc() using local secret=42 that exits with return 42, invoke it, and write $? into status.txt.',
+    teach: `By default, all variables in shell functions leak into the global environment:
+- \`local var=value\`: Limits variable lifecycle strictly to the executing function frame.
+- \`return N\`: Exits the function with a specific numeric exit code (0–255).
+- \`$?\`: Captures the return code of the last executed command or function.`,
+    learning: [
+      'Variables without local are global and can cause accidental side-effects',
+      'return code sets $? without terminating the parent script',
+      'Functions communicate success with return 0 and errors with return 1..255',
+    ],
+    fieldNotes: [
+      'local can only be used inside functions; executing it in top-level shell triggers an error',
+      'Functions can return strings via stdout: result=$(my_func); return codes are strictly for status',
+      'Capture function outputs and exit codes separately: out=$(f); code=$?',
+    ],
+    transfer: 'Standard shell libraries (shunit2, bats) rely on return codes and local variables to run hundreds of test suites without state pollution.',
+    hint: 'calc() { local secret=42; return 42; }; calc; echo $? > status.txt',
+    par: 3,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'calc() { local secret=42; return 42; }', note: 'Define isolated function' },
+      { command: 'calc', note: 'Execute function' },
+      { command: 'echo $? > status.txt', note: 'Save exit code' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/status.txt' },
+      { type: 'file_contains', path: '/home/learner/status.txt', value: '42' },
+    ],
+  },
+  {
+    id: 'sec-stat-chown',
+    series: 'Permissions & Security',
+    title: 'Inode Inspection & Ownership Assignment',
+    objective: 'Inspect filesystem metadata with stat and reassign owner with chown.',
+    brief: 'Reassign ownership of `server.log` to `root:staff` using chown, and save its stat output into `meta.txt`.',
+    teach: `Files in Unix consist of metadata stored in Inodes and content stored in data blocks:
+- \`stat file\`: Displays complete metadata: Inode number, octal permissions, file size, block count, UID, and GID.
+- \`chown user:group file\`: Modifies user and group ownership of the target file.`,
+    learning: [
+      'stat reveals exact filesystem allocation, inode numbers, and access timestamps',
+      'chown changes owning user and group',
+      'Security auditing requires verifying UID/GID alongside permission bits',
+    ],
+    fieldNotes: [
+      'In Linux, chown -R applies ownership changes recursively across entire directory trees',
+      'stat -c %a file extracts only the numeric octal mode (e.g. 644 or 755) for scripting',
+      'Regular users can chgrp to groups they belong to, but only superuser (root) can reassign file owner via chown',
+    ],
+    transfer: 'Cloud setup scripts (systemd service definitions, Nginx configs) chown app directories to unprivileged service users like www-data.',
+    hint: 'chown root:staff server.log then stat server.log > meta.txt',
+    par: 2,
+    seed: {
+      tree: withHomeFiles({
+        'server.log': 'system started\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [
+      { command: 'chown root:staff server.log', note: 'Reassign file owner' },
+      { command: 'stat server.log > meta.txt', note: 'Capture file metadata' },
+    ],
+    checks: [
+      { type: 'file_owner_is', path: '/home/learner/server.log', value: 'root' },
+      { type: 'file_exists', value: '/home/learner/meta.txt' },
+      { type: 'file_contains', path: '/home/learner/meta.txt', value: 'server.log' },
+    ],
+  },
+  {
+    id: 'txt-awk-filter',
+    series: 'Text Wrangling',
+    title: 'Stream Pattern Filtering with Awk',
+    objective: 'Filter tabular streams using conditional threshold expressions in awk.',
+    brief: 'Filter `metrics.csv` for records where CPU (column 2) is greater than 80, and output server names (column 1) into `alerts.txt`.',
+    teach: `Awk combines pattern matching with action blocks:
+- Syntax: \`awk 'pattern { action }'\`.
+- Patterns can be numeric comparisons: \`awk -F, '$2 > 80 {print $1}'\`.
+- If a line matches the pattern, the action block executes; otherwise, it is skipped.`,
+    learning: [
+      'awk pattern { action } evaluates conditions per line before processing',
+      'Comparison operators (>, <, ==, !=) operate on extracted column variables',
+      'awk filters and formats simultaneously without extra grep pipes',
+    ],
+    fieldNotes: [
+      'Awk automatically handles numeric coercion: "$2 > 80" parses column 2 as a float/integer',
+      'Multiple conditions can be joined using logical operators: $2 > 80 && $3 == "PROD"',
+      'NR (Number of Records) can skip headers: NR > 1 && $2 > 80 {print $1}',
+    ],
+    transfer: 'Production monitoring agents (Prometheus node-exporter scripts, log parsers) use awk condition filters for threshold alerts.',
+    hint: "awk -F, '$2 > 80 {print $1}' metrics.csv > alerts.txt",
+    par: 1,
+    seed: {
+      tree: withHomeFiles({
+        'metrics.csv': 'srv-alpha,45\nsrv-beta,88\nsrv-gamma,92\nsrv-delta,12\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [
+      { command: "awk -F, '$2 > 80 {print $1}' metrics.csv > alerts.txt", note: 'Filter servers exceeding 80% CPU' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/alerts.txt' },
+      { type: 'file_contains', path: '/home/learner/alerts.txt', value: 'srv-beta\nsrv-gamma' },
+    ],
+  },
+  {
+    id: 'prd-logging-stderr',
+    series: 'Production Hardening',
+    title: 'Standard Error Separation (stderr >&2)',
+    objective: 'Direct diagnostic messages to stderr to keep stdout pipeline-friendly.',
+    brief: 'Redirect an alert "[ERROR] disk full" to standard error with `>&2` and capture standard error in `err.log`.',
+    teach: `In Unix philosophy, programs must separate actionable data from human diagnostic messages:
+- \`stdout\` (file descriptor 1): Clean tabular or serialized payload meant for pipelines.
+- \`stderr\` (file descriptor 2): Logs, errors, warnings, and debugging traces.
+- \`echo "msg" >&2\`: Duplicates output to file descriptor 2 (stderr).
+- \`2> file\`: Captures only standard error while leaving standard output clean.`,
+    learning: [
+      '>&2 redirects echo or printf output to standard error',
+      'Mixing error messages into stdout breaks downstream pipelines (jq, cut, awk)',
+      '2> captures stderr separately for audit and error tracking',
+    ],
+    fieldNotes: [
+      'Production bash scripts often define helper functions: log_err() { echo "[$(date +%T)] ERROR: $*" >&2; }',
+      '&> file or >file 2>&1 redirects both stdout and stderr together',
+      'Silent commands on success is standard Unix convention (Rule of Silence)',
+    ],
+    transfer: 'CI/CD pipelines (GitHub Actions, GitLab CI) capture stderr streams to flag failing build steps in job summaries.',
+    hint: 'echo "[ERROR] disk full" >&2 2> err.log',
+    par: 1,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'echo "[ERROR] disk full" >&2 2> err.log', note: 'Direct message to stderr and capture in log' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/err.log' },
+      { type: 'file_contains', path: '/home/learner/err.log', value: '[ERROR] disk full' },
+    ],
+  },
+  {
+    id: 'cap-1-scaffold',
+    series: 'Capstone Project',
+    title: 'Capstone: Production Script Scaffold',
+    objective: 'Scaffold a defensive enterprise script with strict mode, signal trap, and execution permissions.',
+    brief: 'Create an executable script `sys-audit.sh` that enables `set -euo pipefail`, captures a temporary file with `mktemp`, cleans it up with a `trap` on EXIT, and mark it executable.',
+    teach: `Production Bash scripts must be engineered for predictability and zero accidental side-effects:
+- \`set -euo pipefail\`: Aborts immediately on unhandled command failures, undefined variables, or failing pipeline stages.
+- \`TMP=$(mktemp)\`: Allocates an isolated temporary scratchpad file under \`/tmp\`.
+- \`trap 'rm -f $TMP' EXIT\`: Guarantees cleanup even if the script crashes or is terminated early.
+- \`chmod +x sys-audit.sh\`: Enables binary execution bit for operating system invocation.`,
+    learning: [
+      'Strict mode prevents silent errors from propagating across production workloads',
+      'Trapping EXIT provides deterministic resource disposal identical to try-finally',
+      'Production CLI utilities require the executable bit (chmod +x)',
+    ],
+    fieldNotes: [
+      'In enterprise DevOps, scripts without set -euo pipefail fail code review in modern CI pipelines',
+      'Always quote the variable in traps: trap \'rm -f "$TMP"\' EXIT to prevent whitespace path errors',
+      'Use shellcheck in automated linters to catch common syntax and quoting oversights',
+    ],
+    transfer: 'Kubernetes container entrypoints (entrypoint.sh) and Terraform provisioners strictly follow this scaffolding pattern.',
+    hint: 'echo "set -euo pipefail" > sys-audit.sh then add trap and chmod +x sys-audit.sh',
+    par: 4,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'echo "set -euo pipefail" > sys-audit.sh', note: 'Enable strict safety flags' },
+      { command: 'echo "TMP=$(mktemp)" >> sys-audit.sh', note: 'Allocate scratchpad' },
+      { command: 'echo \'trap "rm -f $TMP" EXIT\' >> sys-audit.sh', note: 'Register disposal trap' },
+      { command: 'chmod +x sys-audit.sh', note: 'Mark script executable' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/sys-audit.sh' },
+      { type: 'file_contains', path: '/home/learner/sys-audit.sh', value: 'set -euo pipefail' },
+      { type: 'file_contains', path: '/home/learner/sys-audit.sh', value: 'trap' },
+      { type: 'file_mode_is', path: '/home/learner/sys-audit.sh', value: '755' },
+    ],
+  },
+  {
+    id: 'cap-2-pipeline',
+    series: 'Capstone Project',
+    title: 'Capstone: Log Stream Analytics',
+    objective: 'Parse high-volume access logs to isolate HTTP 5xx errors and rank failing endpoints.',
+    brief: 'Inspect `nginx.log`, filter lines containing HTTP 500 or 502, extract the endpoint path (column 6), rank incidents with `sort | uniq -c`, and save to `incidents.txt`.',
+    teach: `Log analysis in Unix chains specialized stream filters together:
+- \`grep 50 nginx.log\`: Rapidly filters only lines representing server errors.
+- \`awk '{print $6}'\`: Projects the target URI endpoint from standard combined access log formats.
+- \`sort | uniq -c\`: Aggregates duplicate endpoints and computes occurrence frequencies.
+- \`sort -n > incidents.txt\`: Emits a sorted frequency distribution for incident triage.`,
+    learning: [
+      'Piping grep into awk isolates columns from matching error lines',
+      'sort | uniq -c is the canonical Unix idiom for frequency histograms',
+      'Numeric sort (sort -n) surfaces the highest incident culprits at the end of the report',
+    ],
+    fieldNotes: [
+      'In high-throughput logs (gigabytes per minute), avoid reading files into RAM: pipelines process line-by-line in stream buffers',
+      'Combine awk pattern filtering directly: awk \'$9 ~ /^50/ {print $6}\' for even faster execution',
+      'Production SRE incident responses rely on this exact one-liner to identify failing microservice endpoints',
+    ],
+    transfer: 'Real-time observability agents and log scrapers (Datadog, Grafana Loki, Fluentd) use this exact tokenization logic.',
+    hint: 'grep 50 nginx.log | awk \'{print $6}\' | sort | uniq -c | sort -n > incidents.txt',
+    par: 1,
+    seed: {
+      tree: withHomeFiles({
+        'nginx.log': '192.168.1.10 - - [10/Oct/2026:10:00:01] "GET /api/v1/users HTTP/1.1" 200 1204\n10.0.0.45 - - [10/Oct/2026:10:00:02] "POST /api/v1/checkout HTTP/1.1" 500 452\n172.16.0.8 - - [10/Oct/2026:10:00:03] "POST /api/v1/checkout HTTP/1.1" 500 452\n10.0.0.45 - - [10/Oct/2026:10:00:04] "GET /health HTTP/1.1" 200 45\n192.168.1.10 - - [10/Oct/2026:10:00:05] "POST /api/v1/checkout HTTP/1.1" 500 452\n10.0.0.99 - - [10/Oct/2026:10:00:06] "GET /api/v1/items HTTP/1.1" 502 312\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [
+      { command: 'grep 50 nginx.log | awk \'{print $6}\' | sort | uniq -c | sort -n > incidents.txt', note: 'Extract and rank failing endpoints' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/incidents.txt' },
+      { type: 'file_contains', path: '/home/learner/incidents.txt', value: '/api/v1/checkout' },
+      { type: 'file_contains', path: '/home/learner/incidents.txt', value: '3' },
+    ],
+  },
+  {
+    id: 'cap-3-hardening',
+    series: 'Capstone Project',
+    title: 'Capstone: Diagnostic Channels & Stderr',
+    objective: 'Separate diagnostic telemetry from output data and configure directory fallbacks.',
+    brief: 'Configure target directory using `${OUTPUT_DIR:-reports}`, create it with `mkdir -p`, and redirect diagnostic status `"[INFO] Starting incident scan"` to stderr capturing into `audit.err`.',
+    teach: `Enterprise CLI tools maintain clean pipeline interfaces by strictly segregating stdout and stderr:
+- \`DIR="\${OUTPUT_DIR:-reports}"\`: Employs in-memory parameter fallback to prevent unset variable crashes under \`set -u\`.
+- \`mkdir -p "$DIR"\`: Idempotently creates parent paths without error if they already exist.
+- \`echo "[INFO] ..." >&2\`: Routes status messages to standard error so downstream consumers only receive parseable data.
+- \`2> audit.err\`: Persists operational diagnostic logs independently from business payloads.`,
+    learning: [
+      'Parameter fallback ${VAR:-default} enables dynamic environment override',
+      'mkdir -p guarantees idempotent directory provisioning',
+      'Diagnostic logging to stderr prevents data corruption in automated pipelines',
+    ],
+    fieldNotes: [
+      'In automated Jenkins/GitHub Actions runners, stdout is often piped to JSON analyzers (jq); unescaped echo logs will break the pipeline',
+      'Standard log prefixes: [INFO], [WARN], [ERROR] allow log collectors to categorize severity levels',
+      'Always quote paths "$DIR" to handle paths containing spaces or special characters',
+    ],
+    transfer: 'Cloud deployment agents and container builders direct progress bars to stderr to keep container image IDs clean on stdout.',
+    hint: 'DIR="${OUTPUT_DIR:-reports}"; mkdir -p $DIR; echo "[INFO] Starting incident scan" >&2 2> audit.err',
+    par: 3,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'DIR="${OUTPUT_DIR:-reports}"', note: 'Evaluate fallback directory' },
+      { command: 'mkdir -p $DIR', note: 'Create destination folder' },
+      { command: 'echo "[INFO] Starting incident scan" >&2 2> audit.err', note: 'Emit diagnostic trace to stderr' },
+    ],
+    checks: [
+      { type: 'dir_exists', value: '/home/learner/reports' },
+      { type: 'file_exists', value: '/home/learner/audit.err' },
+      { type: 'file_contains', path: '/home/learner/audit.err', value: '[INFO] Starting incident scan' },
+    ],
+  },
+  {
+    id: 'cap-4-delivery',
+    series: 'Capstone Project',
+    title: 'Capstone: Production Delivery & Audit Signoff',
+    objective: 'Synthesize all skills into a final audit report signed with executive status and file permissions.',
+    brief: 'Compile findings into `reports/summary.txt`, seal the report with status `AUDIT_COMPLETE: 3 incidents resolved`, and restrict permissions to `chmod 644`.',
+    teach: `The final stage of production automation is artifact delivery and signoff:
+- Synthesize error metrics, incident counts, and system status into an executive summary.
+- Apply production permissions (\`chmod 644\`) to ensure reports are read-only for general users and writeable only by the owner.
+- Deliver an immutable audit trail suitable for SOC2, compliance, and engineering post-mortems.`,
+    learning: [
+      'Executive summaries aggregate operational data into human-actionable deliverables',
+      'chmod 644 enforces standard security compliance on generated audit reports',
+      'You have mastered end-to-end production Linux/Bash engineering from navigation to enterprise automation',
+    ],
+    fieldNotes: [
+      'In production, automated reports are uploaded to S3/GCS buckets and notified via Slack/PagerDuty webhooks',
+      'Include machine-readable exit codes (0 for healthy, 1 for critical incidents) so monitoring systems can trigger alerts',
+      'Maintaining clean, tested, documented shell scripts is a high-value skill across DevOps, SRE, and backend roles',
+    ],
+    transfer: 'Real-world compliance audits and security scans (CIS benchmarks, PCI-DSS compliance) generate and sign reports following this exact workflow.',
+    hint: 'mkdir -p reports then write AUDIT_COMPLETE to reports/summary.txt then chmod 644 reports/summary.txt',
+    par: 3,
+    seed: {
+      tree: withHomeFiles({
+        'nginx.log': '10.0.0.1 500 /checkout\n10.0.0.2 500 /checkout\n10.0.0.3 500 /checkout\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [
+      { command: 'mkdir -p reports', note: 'Ensure reports directory exists' },
+      { command: 'echo "AUDIT_COMPLETE: 3 incidents resolved" > reports/summary.txt', note: 'Generate signed audit summary' },
+      { command: 'chmod 644 reports/summary.txt', note: 'Lock file permissions' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/reports/summary.txt' },
+      { type: 'file_contains', path: '/home/learner/reports/summary.txt', value: 'AUDIT_COMPLETE' },
+      { type: 'file_mode_is', path: '/home/learner/reports/summary.txt', value: '644' },
+    ],
+  },
 ];
+
 
 export function levelSeries() {
   const map = new Map();
