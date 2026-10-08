@@ -1300,6 +1300,418 @@ Measure with \`cat e-lines.txt\` and \`wc -l e-lines.txt\` before you call it do
       { type: 'cmd_used', value: 'sort' },
     ],
   },
+  // ——— Text Wrangling & Data Engineering ———
+  {
+    id: 'txt-cut-sort',
+    series: 'Text Wrangling',
+    title: 'Tabular Extraction & Sorting',
+    objective: 'Extract CSV columns with cut and sort lines numerically.',
+    brief: 'Extract age from `users.csv` (column 2, comma delimiter) and sort numerically into `ages.txt`.',
+    teach: `\`cut -d, -f2 file\` slices delimiter-separated fields (like CSV/TSV).\n\n\`sort -n\` orders numbers by arithmetic value rather than ASCII alphabet (preventing 10 coming before 2). Combining \`cut | sort -n > out\` is the standard Unix ETL primitive.`,
+    learning: [
+      'cut -d<delim> -f<field> extracts structured columns',
+      'sort -n evaluates numeric value instead of ASCII lexicographical order',
+      'Piping cut into sort forms a lightweight, zero-dependency streaming ETL pipeline',
+    ],
+    fieldNotes: [
+      'For complex CSVs with quoted commas or newlines inside fields, standard cut breaks; use csvkit or awk in production',
+      'sort -k2,2n sorts specifically by the second whitespace-delimited field without pre-cutting',
+      'Use LC_ALL=C sort for maximum byte-level throughput when sorting gigabyte-scale datasets',
+    ],
+    transfer: 'Every big-data framework (MapReduce, Spark, DuckDB) is an evolution of Unix stream sorting and projection.',
+    hint: 'cut -d, -f2 users.csv | sort -n > ages.txt',
+    par: 1,
+    seed: {
+      tree: withHomeFiles({
+        'users.csv': 'alice,30,engineer\nbob,25,designer\ncarol,35,manager\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [{ command: 'cut -d, -f2 users.csv | sort -n > ages.txt', note: 'Extract age column and sort numerically' }],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/ages.txt' },
+      { type: 'file_contains', path: '/home/learner/ages.txt', value: '25\n30\n35' },
+    ],
+  },
+  {
+    id: 'txt-uniq',
+    series: 'Text Wrangling',
+    title: 'Frequency Counting with Uniq',
+    objective: 'Aggregate and count duplicate occurrences in a stream.',
+    brief: 'Sort `ips.log` and count unique IP addresses into `counts.txt` using `uniq -c`.',
+    teach: `\`uniq\` collapses adjacent duplicate lines. **CRITICAL:** \`uniq\` only checks consecutive lines, so input MUST be sorted first (\`sort file | uniq\`).\n\n\`uniq -c\` prefixes each unique line with its frequency count—the fastest way to generate access log histograms.`,
+    learning: [
+      'uniq requires pre-sorted input to catch non-adjacent duplicates',
+      'uniq -c outputs occurrence frequencies for histogram analytics',
+      'sort | uniq -c | sort -nr is the canonical top-N frequency pipeline',
+    ],
+    fieldNotes: [
+      'Always remember: uniq on unsorted input drops nothing unless identical lines happen to sit together',
+      'Use sort -u instead of sort | uniq if you do not need count metadata (-c), saving a process fork',
+      'uniq -d prints only duplicate entries; uniq -u prints only non-repeating entries',
+    ],
+    transfer: 'Building real-time security alerting for brute-force attacks starts with parsing auth.log via sort | uniq -c.',
+    hint: 'sort ips.log | uniq -c > counts.txt',
+    par: 1,
+    seed: {
+      tree: withHomeFiles({
+        'ips.log': '192.168.1.1\n10.0.0.1\n192.168.1.1\n172.16.0.1\n10.0.0.1\n192.168.1.1\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [{ command: 'sort ips.log | uniq -c > counts.txt', note: 'Sort IPs and count frequencies' }],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/counts.txt' },
+      { type: 'file_contains', path: '/home/learner/counts.txt', value: '192.168.1.1' },
+      { type: 'cmd_used', value: 'uniq' },
+    ],
+  },
+  {
+    id: 'txt-tr',
+    series: 'Text Wrangling',
+    title: 'Character Normalization with Tr',
+    objective: 'Translate character sets and normalize case.',
+    brief: 'Convert all uppercase letters in `mixed.txt` to lowercase and save as `clean.txt`.',
+    teach: `\`tr\` (translate) transforms or deletes single characters from stdin.\n\nSyntax: \`tr SET1 SET2\` maps every byte in SET1 to the corresponding byte in SET2. \`tr A-Z a-z\` lowercases ASCII text. \`tr -d "\\r"\` strips Windows carriage returns.`,
+    learning: [
+      'tr is a pure stream filter (stdin only, no filename arguments)',
+      'tr A-Z a-z normalizes ASCII text case for uniform querying',
+      'tr -d deletes unwanted characters like carriage returns or punctuation',
+    ],
+    fieldNotes: [
+      'tr cannot take a file argument directly; always redirect input (tr ... < file) or pipe into it',
+      'For multibyte UTF-8 characters (like Persian or accents), tr behaves as raw bytes; use awk or sed for unicode',
+      'tr -s squeezes repeated characters into single occurrences (e.g. tr -s " " normalizes whitespace)',
+    ],
+    transfer: 'Cross-platform DevOps scripts constantly use tr -d "\\r" to neutralize Windows carriage-returns in Docker containers.',
+    hint: 'cat mixed.txt | tr A-Z a-z > clean.txt',
+    par: 1,
+    seed: {
+      tree: withHomeFiles({
+        'mixed.txt': 'HELLO World FROM BASH\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [{ command: 'cat mixed.txt | tr A-Z a-z > clean.txt', note: 'Translate uppercase to lowercase' }],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/clean.txt' },
+      { type: 'file_contains', path: '/home/learner/clean.txt', value: 'hello world from bash' },
+    ],
+  },
+  {
+    id: 'txt-sed',
+    series: 'Text Wrangling',
+    title: 'Stream Editing with Sed',
+    objective: 'Perform regex-based stream replacement across text files.',
+    brief: 'Replace all occurrences of `development` with `production` in `config.env` and save to `prod.env`.',
+    teach: `\`sed\` (Stream Editor) modifies text line-by-line as it flows through a stream.\n\nThe substitution command \`s/pattern/replacement/flags\` is ubiquitous. Flag \`g\` replaces all occurrences on each line (global); without \`g\`, only the first match is replaced.`,
+    learning: [
+      'sed s/old/new/g searches and replaces patterns across lines',
+      'The delimiter does not have to be /; s#http://#https://#g prevents backslash escaping',
+      'sed operates non-destructively by default, streaming modified text to stdout',
+    ],
+    fieldNotes: [
+      'In production, sed -i edits files in-place; warning: GNU sed (-i) and BSD/macOS sed (-i "") have incompatible syntax',
+      'Use sed \'/^#/d; /^$/d\' to strip both comments and empty lines from configuration files',
+      'sed buffers one line at a time in its pattern space, allowing processing of multi-terabyte files without RAM exhaustion',
+    ],
+    transfer: 'Continuous deployment pipelines (GitHub Actions, GitLab CI) use sed to inject dynamic build secrets into config files.',
+    hint: 'sed s/development/production/g config.env > prod.env',
+    par: 1,
+    seed: {
+      tree: withHomeFiles({
+        'config.env': 'ENV=development\nDEBUG=true\nAPI_URL=http://dev.internal\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [{ command: 'sed s/development/production/g config.env > prod.env', note: 'Replace environment with production' }],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/prod.env' },
+      { type: 'file_contains', path: '/home/learner/prod.env', value: 'ENV=production' },
+    ],
+  },
+  {
+    id: 'txt-awk',
+    series: 'Text Wrangling',
+    title: 'Field Extraction with Awk',
+    objective: 'Parse and format structured fields without writing custom code.',
+    brief: 'Extract server name ($1) and status ($3) from `servers.txt` into `status.txt` using `awk`.',
+    teach: `\`awk\` is a complete domain-specific programming language for table and text processing.\n\nFields are split by whitespace by default: \`$1\` is the first column, \`$2\` the second, \`$NF\` the last column, and \`$0\` the entire line. \`{print $1, $3}\` formats and emits the selected fields separated by space.`,
+    learning: [
+      'awk automatically parses delimited records into numbered positional fields ($1..$N)',
+      '$0 represents the entire unmodified input record',
+      'awk combines pattern matching with action blocks: pattern { action }',
+    ],
+    fieldNotes: [
+      'Specify custom field delimiters using the -F flag: awk -F: \'{print $1, $6}\' /etc/passwd',
+      'awk maintains internal variables: NR (current record/line number) and NF (number of fields in line)',
+      'Column sums in one line: awk \'{sum += $1} END {print sum}\' numbers.txt',
+    ],
+    transfer: 'From server monitoring to parsing metrics and system logs, awk remains the most concise data summarizer on any Unix node.',
+    hint: 'awk \'{print $1, $3}\' servers.txt > status.txt',
+    par: 1,
+    seed: {
+      tree: withHomeFiles({
+        'servers.txt': 'web01 10.0.1.10 online\nweb02 10.0.1.11 offline\ndb01 10.0.2.20 online\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [{ command: 'awk \'{print $1, $3}\' servers.txt > status.txt', note: 'Extract hostname and status fields' }],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/status.txt' },
+      { type: 'file_contains', path: '/home/learner/status.txt', value: 'web01 online' },
+      { type: 'file_contains', path: '/home/learner/status.txt', value: 'web02 offline' },
+    ],
+  },
+  {
+    id: 'txt-find-xargs',
+    series: 'Text Wrangling',
+    title: 'Batch Processing with Find & Xargs',
+    objective: 'Search directory hierarchies and batch execute commands over matches.',
+    brief: 'Find all `.log` files in `logs` and pass them to `wc -l` using `xargs` to create `audit.txt`.',
+    teach: `\`find path -name pattern\` traverses directories recursively matching filesystem nodes.\n\n\`xargs\` collects streamed lines from stdin and converts them into command-line arguments for another utility (\`cmd arg1 arg2...\`). This avoids argument list length limits while enabling massive batch processing.`,
+    learning: [
+      'find navigates directory trees recursively using metadata and name filters',
+      'xargs converts input lines into argument lists for downstream commands',
+      'find ... | xargs ... is the foundation of Unix bulk operations',
+    ],
+    fieldNotes: [
+      'Filenames with spaces break standard xargs; always use find -print0 | xargs -0 in production scripts',
+      'Use xargs -P 4 to execute jobs across 4 parallel CPU worker processes for high-performance processing',
+      'find -type f restricts matches to regular files, excluding directories and sockets',
+    ],
+    transfer: 'Container maintenance cronjobs clean old logs and stale artifacts using find /var/log -mtime +30 | xargs rm -f.',
+    hint: 'find logs -name *.log | xargs wc -l > audit.txt',
+    par: 1,
+    seed: {
+      tree: (() => {
+        const t = defaultHome();
+        t.children.home.children.learner.children.logs = {
+          type: 'dir',
+          children: {
+            'app.log': { type: 'file', content: 'req1\nreq2\n' },
+            'error.log': { type: 'file', content: 'err1\n' },
+            'readme.txt': { type: 'file', content: 'docs\n' },
+          },
+        };
+        return t;
+      })(),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [{ command: 'find logs -name *.log | xargs wc -l > audit.txt', note: 'Find log files and count lines with xargs' }],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/audit.txt' },
+      { type: 'cmd_used', value: 'find' },
+      { type: 'cmd_used', value: 'xargs' },
+    ],
+  },
+
+  // ——— Permissions & File Security ———
+  {
+    id: 'sec-chmod',
+    series: 'Permissions & Security',
+    title: 'Executable Permissions with Chmod',
+    objective: 'Understand and apply executable permissions to scripts.',
+    brief: 'Make `deploy.sh` executable by granting execute permission (`chmod +x deploy.sh`).',
+    teach: `Linux controls file access using a 3x3 permission matrix: **User (u)**, **Group (g)**, and **Others (o)** across **Read (r=4)**, **Write (w=2)**, and **Execute (x=1)**.\n\nA bash script cannot be executed directly (\`./deploy.sh\`) without the execute bit (\`+x\`). \`chmod +x file\` adds execution permissions; \`chmod 755 file\` sets rwxr-xr-x explicitly.`,
+    learning: [
+      'The execute bit (+x) is required for kernel execve to execute scripts directly',
+      'chmod modifies access permissions using symbolic (+x, u+w) or octal (755, 644) notation',
+      'Standard executable script permissions are 755 (owner can edit/run, others can read/run)',
+    ],
+    fieldNotes: [
+      'Octal math: r=4, w=2, x=1. 7=4+2+1 (rwx), 5=4+0+1 (r-x). 755 means owner rwx, group r-x, others r-x',
+      'Never run chmod 777 in production; granting world-writable permissions introduces privilege escalation vectors',
+      'umask defines the default permissions subtracted from newly created files (typically 022 → files 644, dirs 755)',
+    ],
+    transfer: 'CI/CD pipelines immediately fail with "Permission denied: ./build.sh" if git loses the file execute bit.',
+    hint: 'chmod +x deploy.sh',
+    par: 1,
+    seed: {
+      tree: (() => {
+        const t = defaultHome();
+        t.children.home.children.learner.children['deploy.sh'] = {
+          type: 'file',
+          content: '#!/bin/bash\necho "deploying..."\n',
+          mode: '644',
+        };
+        return t;
+      })(),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [{ command: 'chmod +x deploy.sh', note: 'Add execute permission to script' }],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/deploy.sh' },
+      { type: 'file_mode_is', path: '/home/learner/deploy.sh', value: '755' },
+    ],
+  },
+  {
+    id: 'sec-links',
+    series: 'Permissions & Security',
+    title: 'Symbolic Links & Inode Pointers',
+    objective: 'Create symbolic links to establish non-duplicative file references.',
+    brief: 'Create a symbolic link `current.conf` pointing to `config-v2.json`.',
+    teach: `\`ln -s TARGET LINK_NAME\` creates a **symbolic link** (symlink)—a special file containing a path reference to another filesystem node.\n\nSymlinks allow zero-downtime deployments: an application points to \`current.conf\`, and deployments atomically update the symlink (\`ln -sfn new current\`) without stopping the process.`,
+    learning: [
+      'ln -s creates a soft pointer rather than copying file bytes',
+      'Symlinks can cross filesystem boundaries and point to directories',
+      'Atomic symlink swapping enables zero-downtime blue/green server deployments',
+    ],
+    fieldNotes: [
+      'Hard links (ln target link) share the same inode number; deleting the original keeps data intact until all links reach 0',
+      'Symlinks store the target string; if the target file moves or is renamed, the symlink becomes dangling/broken',
+      'Always use absolute paths or verify relative paths from the link destination, not the caller cwd',
+    ],
+    transfer: 'Nginx, systemd, and modern package managers (Homebrew, npm) manage active versions entirely via symlinks.',
+    hint: 'ln -s config-v2.json current.conf',
+    par: 1,
+    seed: {
+      tree: withHomeFiles({
+        'config-v2.json': '{"version": 2, "port": 8080}\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [{ command: 'ln -s config-v2.json current.conf', note: 'Create symbolic link to config-v2.json' }],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/current.conf' },
+      { type: 'file_contains', path: '/home/learner/current.conf', value: 'version": 2' },
+    ],
+  },
+
+  // ——— Production Hardening & Automation ———
+  {
+    id: 'prd-strict',
+    series: 'Production Hardening',
+    title: 'Unofficial Strict Mode (set -euo pipefail)',
+    objective: 'Harden shell environments against silent errors and uninitialized variables.',
+    brief: 'Enable production strict mode using `set -euo pipefail`.',
+    teach: `By default, Bash fails silently: errors in early commands are ignored, undefined variables evaluate to empty strings, and failed pipes report exit code 0 if the last command succeeds.\n\n\`set -euo pipefail\` fixes this:\n- \`-e\`: Exit immediately on command failure.\n- \`-u\`: Treat unset variables as fatal errors.\n- \`-o pipefail\`: Return the exit status of the last failed command in a pipeline.`,
+    learning: [
+      'set -e aborts script execution on the first non-zero return code',
+      'set -u prevents catastrophic bugs like rm -rf "$MY_DIR/*" when MY_DIR is empty',
+      'set -o pipefail preserves error codes throughout piped commands',
+    ],
+    fieldNotes: [
+      'Place \`set -euo pipefail\` at the very top of every production shell script after the shebang',
+      'If a specific command is expected to fail legitimately, guard it: cmd || true',
+      'In subshells or testing suites, check \`set -x\` to print execution traces for debugging',
+    ],
+    transfer: 'The catastrophic bug \`rm -rf "$PREFIX/$DIR"\` deleting the entire root filesystem happens exclusively when set -u is missing.',
+    hint: 'set -euo pipefail',
+    par: 1,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [{ command: 'set -euo pipefail', note: 'Enable production strict mode' }],
+    checks: [
+      { type: 'opt_is', opt: 'optE', value: true },
+      { type: 'opt_is', opt: 'optU', value: true },
+      { type: 'opt_is', opt: 'optPipefail', value: true },
+    ],
+  },
+  {
+    id: 'prd-trap',
+    series: 'Production Hardening',
+    title: 'Resource Cleanup with Trap',
+    objective: 'Guarantee resource deallocation and lock file removal on termination.',
+    brief: 'Register an automatic cleanup handler with `trap` to delete `/tmp/lock.pid` on `EXIT`.',
+    teach: `\`trap 'COMMAND' SIGNALS...\` intercepts system signals or script exits and triggers handler logic.\n\nEven if a script crashes, is killed with Ctrl+C (SIGINT), or exits early via \`set -e\`, a trap registered on \`EXIT\` is guaranteed to run. This ensures locks, temp files, and socket descriptors are cleaned up.`,
+    learning: [
+      'trap registers handler callbacks for process signals and termination events',
+      'EXIT traps execute unconditionally when the shell terminates (success or failure)',
+      'Traps prevent dangling lock files that block automated retry pipelines',
+    ],
+    fieldNotes: [
+      'Common idiom: TMP=$(mktemp); trap \'rm -f "$TMP"\' EXIT INT TERM',
+      'SIGKILL (kill -9) cannot be caught or trapped by any user process; the kernel terminates immediately',
+      'To reset or unbind a trap to default behavior, pass a dash: trap - EXIT',
+    ],
+    transfer: 'Database migration runners create lockfiles to prevent concurrent mutations and clean them using EXIT traps.',
+    hint: 'trap \'rm -f /tmp/lock.pid\' EXIT',
+    par: 1,
+    seed: {
+      tree: withHomeFiles({
+        'app.sh': '#!/bin/bash\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+    },
+    solution: [{ command: 'trap \'rm -f /tmp/lock.pid\' EXIT', note: 'Set cleanup trap on script exit' }],
+    checks: [
+      { type: 'trap_is', sig: 'EXIT', value: 'rm -f /tmp/lock.pid' },
+    ],
+  },
+  {
+    id: 'prd-params',
+    series: 'Production Hardening',
+    title: 'Defensive Parameter Expansions',
+    objective: 'Apply fallback defaults and pattern stripping without calling external subprocesses.',
+    brief: 'Emit default region `${REGION:-us-east-1}` and stripped image `${IMAGE#repo/}` into `deploy.txt`.',
+    teach: `Bash has built-in string manipulation that avoids slow subprocess forks like \`sed\` or \`cut\`:\n- \`\${VAR:-default}\`: If VAR is unset or null, evaluate to \`default\`.\n- \`\${VAR#prefix}\`: Strip shortest matching prefix.\n- \`\${VAR%suffix}\`: Strip shortest matching suffix.\n- \`\${#VAR}\`: Return string character length.`,
+    learning: [
+      '${VAR:-default} enables defensive environment variable configuration',
+      '${VAR#prefix} and ${VAR%suffix} strip path components in pure shell memory',
+      'Native parameter expansion runs hundreds of times faster than forking sed or awk',
+    ],
+    fieldNotes: [
+      '${VAR:=default} not only evaluates to default, but also mutates VAR by assigning the default value to it',
+      '${VAR:?error message} aborts the script with an error if VAR is unset, serving as an inline assertion',
+      '${VAR//search/replace} performs in-memory global search and replace without sed',
+    ],
+    transfer: 'Cloud configuration scripts (Kubernetes entrypoints, Terraform shims) configure defaults entirely via ${VAR:-default}.',
+    hint: 'echo "${REGION:-us-east-1} ${IMAGE#repo/}" > deploy.txt',
+    par: 1,
+    seed: {
+      tree: withHomeFiles({
+        'readme.txt': 'params\n',
+      }),
+      cwd: '/home/learner',
+      home: '/home/learner',
+      env: { IMAGE: 'repo/app:v1.2' },
+    },
+    solution: [{ command: 'echo "${REGION:-us-east-1} ${IMAGE#repo/}" > deploy.txt', note: 'Expand default region and strip repo prefix' }],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/deploy.txt' },
+      { type: 'file_contains', path: '/home/learner/deploy.txt', value: 'us-east-1 app:v1.2' },
+    ],
+  },
+  {
+    id: 'prd-cli',
+    series: 'Production Hardening',
+    title: 'CLI Positional Arguments ($1, $@, $#)',
+    objective: 'Write modular scripts accepting dynamic arguments from users.',
+    brief: 'Create an executable backup script `backup.sh` that copies its first argument `$1` to `$1.bak`.',
+    teach: `Shell scripts accept command-line parameters as positional arguments:\n- \`$1\`, \`$2\` ... \`$9\`: Positional arguments passed to the script or function.\n- \`$#\`: Total count of positional arguments.\n- \`$@\`: All arguments as individual quoted words (\`"$@"\` preserves internal spaces).\n- \`shift\`: Shifts arguments left ($2 becomes $1), enabling loop-based flag parsing.`,
+    learning: [
+      '$1..$N access CLI arguments passed during script invocation',
+      '$# tracks argument count for input validation (e.g. [ $# -lt 1 ] && exit 1)',
+      'Always quote positional arguments ("$1") to avoid word-splitting bugs on filenames with spaces',
+    ],
+    fieldNotes: [
+      'Use "$@" (with quotes) instead of $*; "$@" expands to ("$1" "$2" ...), preserving spaces inside arguments',
+      'The shift command discards $1 and shifts remaining parameters down by one, the core mechanism of while loops',
+      'getopts parses standard Unix single-letter flags (like -v, -f file) with automated error handling',
+    ],
+    transfer: 'Every reusable DevOps script is a CLI interface accepting arguments through positional parameters and getopts.',
+    hint: 'echo \'cp "$1" "$1.bak"\' > backup.sh && chmod +x backup.sh',
+    par: 2,
+    seed: { tree: defaultHome(), cwd: '/home/learner', home: '/home/learner' },
+    solution: [
+      { command: 'echo \'cp "$1" "$1.bak"\' > backup.sh', note: 'Write backup logic using positional argument $1' },
+      { command: 'chmod +x backup.sh', note: 'Make script executable' },
+    ],
+    checks: [
+      { type: 'file_exists', value: '/home/learner/backup.sh' },
+      { type: 'file_contains', path: '/home/learner/backup.sh', value: '$1' },
+      { type: 'file_mode_is', path: '/home/learner/backup.sh', value: '755' },
+    ],
+  },
 ];
 
 export function levelSeries() {
@@ -1369,6 +1781,14 @@ function runCheck(check, shell, traces) {
       return traces.some((t) => commandNamesInTrace(t).includes(check.value));
     case 'op_used':
       return traces.some((t) => t.line.includes(check.value));
+    case 'file_mode_is': {
+      const n = shell.fs.getNode(check.path);
+      return !!n && n.mode === check.value;
+    }
+    case 'opt_is':
+      return shell[check.opt] === check.value;
+    case 'trap_is':
+      return Boolean(shell._traps?.[check.sig]?.includes(check.value));
     default:
       return false;
   }
@@ -1400,6 +1820,12 @@ function describeCheck(check) {
       return `you must use ${check.value}`;
     case 'op_used':
       return `you must use \`${check.value}\``;
+    case 'file_mode_is':
+      return `permissions of ${check.path} must be ${check.value}`;
+    case 'opt_is':
+      return `shell option ${check.opt} must be enabled`;
+    case 'trap_is':
+      return `trap for ${check.sig} must be configured`;
     default:
       return 'unmet check';
   }

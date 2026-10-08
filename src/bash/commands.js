@@ -85,6 +85,12 @@ const COMMANDS = {
   jobs: cmdJobs,
   wait: cmdWait,
   clear: cmdClear,
+  uniq: cmdUniq,
+  awk: cmdAwk,
+  ln: cmdLn,
+  mktemp: cmdMktemp,
+  trap: cmdTrap,
+  printf: cmdPrintf,
   true: () => result(),
   false: () => result('', '', 1),
   help: cmdHelp,
@@ -95,13 +101,14 @@ const COMMANDS = {
  *
  * Args:
  *     ctx: command context
- *     args: CLI args
+ *     args: CLI args (-r, -n)
  *     stdin: pipeline stdin
  * Returns:
  *     CmdResult
  */
 function cmdSort(ctx, args, stdin) {
   const reverse = args.includes('-r');
+  const numeric = args.includes('-n');
   const files = args.filter((a) => !a.startsWith('-'));
   let text = stdin ?? '';
   if (files.length) {
@@ -114,9 +121,141 @@ function cmdSort(ctx, args, stdin) {
   }
   const lines = text.split('\n');
   if (lines[lines.length - 1] === '') lines.pop();
-  lines.sort();
+  lines.sort((a, b) => {
+    if (numeric) {
+      const numA = parseFloat(a) || 0;
+      const numB = parseFloat(b) || 0;
+      return numA - numB;
+    }
+    return a.localeCompare(b);
+  });
   if (reverse) lines.reverse();
   return result(lines.map((l) => l + '\n').join(''));
+}
+
+/**
+ * Report or omit repeated lines.
+ *
+ * Args:
+ *     ctx: command context
+ *     args: -c, -d, -u
+ *     stdin: pipeline stdin
+ * Returns:
+ *     CmdResult
+ */
+function cmdUniq(ctx, args, stdin) {
+  const count = args.includes('-c');
+  const duplicateOnly = args.includes('-d');
+  const uniqueOnly = args.includes('-u');
+  const files = args.filter((a) => !a.startsWith('-'));
+  let text = stdin ?? '';
+  if (files.length) {
+    const abs = resolvePath(ctx.cwd, files[0], ctx.env.HOME);
+    const node = ctx.fs.getNode(abs);
+    if (!node || node.type !== 'file') {
+      return result('', `uniq: cannot read: ${files[0]}: No such file or directory`, 1);
+    }
+    text = node.content;
+  }
+  const lines = text.split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  if (lines.length === 0) return result('');
+
+  const groups = [];
+  let curLine = lines[0];
+  let curCount = 1;
+  for (let i = 1; i < lines.length; i += 1) {
+    if (lines[i] === curLine) {
+      curCount += 1;
+    } else {
+      groups.push({ line: curLine, count: curCount });
+      curLine = lines[i];
+      curCount = 1;
+    }
+  }
+  groups.push({ line: curLine, count: curCount });
+
+  let filtered = groups;
+  if (duplicateOnly) filtered = filtered.filter((g) => g.count > 1);
+  if (uniqueOnly) filtered = filtered.filter((g) => g.count === 1);
+
+  const out = filtered
+    .map((g) => {
+      if (count) {
+        return `   ${g.count} ${g.line}\n`;
+      }
+      return `${g.line}\n`;
+    })
+    .join('');
+
+  return result(out);
+}
+
+/**
+ * Pattern scanning and processing language (minimal awk).
+ *
+ * Args:
+ *     ctx: command context
+ *     args: [-F fs] script [file]
+ *     stdin: pipeline stdin
+ * Returns:
+ *     CmdResult
+ */
+function cmdAwk(ctx, args, stdin) {
+  let delim = null;
+  let script = '';
+  const files = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '-F' && args[i + 1]) {
+      delim = args[i + 1];
+      i += 1;
+      continue;
+    }
+    if (args[i].startsWith('-F')) {
+      delim = args[i].slice(2);
+      continue;
+    }
+    if (!script && !args[i].startsWith('-')) {
+      script = args[i];
+      continue;
+    }
+    if (!args[i].startsWith('-')) {
+      files.push(args[i]);
+    }
+  }
+  let text = stdin ?? '';
+  if (files.length) {
+    const abs = resolvePath(ctx.cwd, files[0], ctx.env.HOME);
+    const node = ctx.fs.getNode(abs);
+    if (!node || node.type !== 'file') {
+      return result('', `awk: cannot open ${files[0]}: No such file or directory`, 2);
+    }
+    text = node.content;
+  }
+  const lines = text.split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+
+  const printMatch = script.match(/\{print\s+(.+)\}/);
+  if (!printMatch) {
+    return result(text ? text + (text.endsWith('\n') ? '' : '\n') : '');
+  }
+  const fieldExprs = printMatch[1].split(',').map((s) => s.trim());
+  const outLines = lines.map((line) => {
+    const fields = delim ? line.split(delim) : line.trim().split(/\s+/);
+    const resolved = fieldExprs.map((fe) => {
+      if (fe === '$0') return line;
+      if (fe === '$NF') return fields[fields.length - 1] ?? '';
+      const m = fe.match(/^\$(\d+)$/);
+      if (m) {
+        const idx = parseInt(m[1], 10);
+        return idx === 0 ? line : (fields[idx - 1] ?? '');
+      }
+      if (fe.startsWith('"') && fe.endsWith('"')) return fe.slice(1, -1);
+      return fe;
+    });
+    return resolved.join(' ');
+  });
+  return result(outLines.length ? outLines.join('\n') + '\n' : '');
 }
 
 /**
@@ -134,14 +273,22 @@ function cmdCut(ctx, args, stdin) {
   let fields = null;
   const files = [];
   for (let i = 0; i < args.length; i += 1) {
-    if (args[i] === '-d') {
-      delim = args[i + 1] ?? '\t';
+    if (args[i] === '-d' && args[i + 1] !== undefined) {
+      delim = args[i + 1];
       i += 1;
       continue;
     }
-    if (args[i] === '-f') {
-      fields = (args[i + 1] ?? '1').split(',').map((n) => parseInt(n, 10));
+    if (args[i].startsWith('-d')) {
+      delim = args[i].slice(2);
+      continue;
+    }
+    if (args[i] === '-f' && args[i + 1] !== undefined) {
+      fields = args[i + 1].split(',').map((n) => parseInt(n, 10));
       i += 1;
+      continue;
+    }
+    if (args[i].startsWith('-f')) {
+      fields = args[i].slice(2).split(',').map((n) => parseInt(n, 10));
       continue;
     }
     if (!args[i].startsWith('-')) files.push(args[i]);
@@ -175,10 +322,46 @@ function cmdCut(ctx, args, stdin) {
  * Returns:
  *     CmdResult
  */
+function expandCharSet(s) {
+  if (s === '[:upper:]') s = 'A-Z';
+  if (s === '[:lower:]') s = 'a-z';
+  let res = '';
+  for (let i = 0; i < s.length; i += 1) {
+    if (s[i + 1] === '-' && i + 2 < s.length) {
+      const start = s.charCodeAt(i);
+      const end = s.charCodeAt(i + 2);
+      if (start <= end) {
+        for (let c = start; c <= end; c += 1) {
+          res += String.fromCharCode(c);
+        }
+        i += 2;
+        continue;
+      }
+    }
+    res += s[i];
+  }
+  return res;
+}
+
 function cmdTr(ctx, args, stdin) {
-  const [a, b] = args.filter((x) => !x.startsWith('-'));
-  if (!a || !b) return result('', 'tr: usage: tr SET1 SET2', 1);
+  const nonFlags = args.filter((x) => !x.startsWith('-'));
+  const isDelete = args.includes('-d');
   const src = stdin ?? '';
+
+  if (isDelete) {
+    const chars = expandCharSet(nonFlags[0] ?? '');
+    const set = new Set(chars);
+    let out = '';
+    for (const ch of src) {
+      if (!set.has(ch)) out += ch;
+    }
+    return result(out);
+  }
+
+  const [rawA, rawB] = nonFlags;
+  if (!rawA || !rawB) return result('', 'tr: usage: tr SET1 SET2', 1);
+  const a = expandCharSet(rawA);
+  const b = expandCharSet(rawB);
   const map = new Map();
   for (let i = 0; i < a.length; i += 1) map.set(a[i], b[Math.min(i, b.length - 1)]);
   let out = '';
@@ -459,10 +642,102 @@ function cmdReturn(ctx, args) {
 }
 
 function cmdSet(ctx, args) {
-  if (args.includes('-e')) ctx.shell.optE = true;
-  if (args.includes('+e')) ctx.shell.optE = false;
-  if (args.includes('-u')) ctx.shell.optU = true;
-  if (args.includes('+u')) ctx.shell.optU = false;
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i];
+    if (a.startsWith('-')) {
+      if (a.includes('e')) ctx.shell.optE = true;
+      if (a.includes('u')) ctx.shell.optU = true;
+      if (a.includes('o') && (args[i + 1] === 'pipefail' || args.includes('pipefail'))) {
+        ctx.shell.optPipefail = true;
+      }
+    } else if (a.startsWith('+')) {
+      if (a.includes('e')) ctx.shell.optE = false;
+      if (a.includes('u')) ctx.shell.optU = false;
+    }
+  }
+  return result();
+}
+
+/**
+ * Make links between files.
+ *
+ * Args:
+ *     ctx: command context
+ *     args: [-s] TARGET LINK_NAME
+ * Returns:
+ *     CmdResult
+ */
+function cmdLn(ctx, args) {
+  const isSymlink = args.includes('-s');
+  const paths = args.filter((a) => !a.startsWith('-'));
+  if (paths.length < 2) return result('', 'ln: missing destination file operand', 1);
+  const target = paths[0];
+  const linkPath = paths[1];
+  const linkAbs = resolvePath(ctx.cwd, linkPath, ctx.env.HOME);
+  const targetAbs = resolvePath(ctx.cwd, target, ctx.env.HOME);
+  const targetNode = ctx.fs.getNode(targetAbs);
+  if (!targetNode && !isSymlink) {
+    return result('', `ln: failed to access '${target}': No such file or directory`, 1);
+  }
+  const { dir, base } = splitPath(linkAbs);
+  if (!ctx.fs.getNode(dir)) {
+    return result('', `ln: failed to create link '${linkPath}': No such file or directory`, 1);
+  }
+  const content = targetNode ? targetNode.content : '';
+  const newFile = createFile(base, content);
+  newFile.isSymlink = isSymlink;
+  newFile.symlinkTarget = target;
+  ctx.fs.attach(dir, newFile);
+  return result();
+}
+
+/**
+ * Create a temporary file.
+ *
+ * Args:
+ *     ctx: command context
+ *     args: CLI args
+ * Returns:
+ *     CmdResult
+ */
+function cmdMktemp(ctx, args) {
+  ctx.shell._tmpN = (ctx.shell._tmpN || 0) + 1;
+  const suffix = Math.random().toString(36).substring(2, 8);
+  const path = `/tmp/tmp.${suffix}`;
+  const { dir, base } = splitPath(path);
+  if (!ctx.fs.getNode('/tmp')) {
+    ctx.fs.attach('/', createDir('tmp'));
+  }
+  ctx.fs.attach('/tmp', createFile(base, ''));
+  return result(path + '\n');
+}
+
+/**
+ * Trap signals and conditions.
+ *
+ * Args:
+ *     ctx: command context
+ *     args: [ACTION] [SIGNALS...]
+ * Returns:
+ *     CmdResult
+ */
+function cmdTrap(ctx, args) {
+  if (args.length === 0) {
+    const list = Object.entries(ctx.shell._traps || {})
+      .map(([sig, cmd]) => `trap -- '${cmd}' ${sig}\n`)
+      .join('');
+    return result(list);
+  }
+  if (!ctx.shell._traps) ctx.shell._traps = {};
+  if (args[0] === '-' && args[1]) {
+    delete ctx.shell._traps[args[1]];
+    return result();
+  }
+  const action = args[0];
+  const signals = args.slice(1);
+  for (const sig of signals) {
+    ctx.shell._traps[sig] = action;
+  }
   return result();
 }
 
@@ -564,6 +839,13 @@ function modeToRwx(mode) {
     }
   }
   return out;
+}
+
+function cmdPrintf(ctx, args) {
+  if (args.length === 0) return result();
+  let fmt = args[0];
+  fmt = fmt.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+  return result(fmt);
 }
 
 function cmdEcho(ctx, args, stdin, rawArgs) {
@@ -921,14 +1203,23 @@ function cmdGrep(ctx, args, stdin) {
 }
 
 function cmdChmod(ctx, args) {
-  const paths = args.filter((a) => !a.startsWith('-'));
-  const modeArg = args.find((a) => /^[0-7]{3,4}$/.test(a)) ?? args[0];
-  const files = args.filter((a, i) => i > 0 && !a.startsWith('-'));
+  const modeArg = args[0];
+  const files = args.slice(1).filter((a) => !a.startsWith('-') && !a.startsWith('+'));
 
   if (!modeArg || files.length === 0) {
     return result('', 'chmod: usage: chmod MODE FILE', 1);
   }
-  if (!/^[0-7]{3,4}$/.test(modeArg)) {
+
+  let finalMode = '644';
+  if (/^[0-7]{3,4}$/.test(modeArg)) {
+    finalMode = modeArg.slice(-3);
+  } else if (modeArg.includes('+x')) {
+    finalMode = '755';
+  } else if (modeArg.includes('-x')) {
+    finalMode = '644';
+  } else if (modeArg.includes('+w')) {
+    finalMode = '664';
+  } else {
     return result('', `chmod: invalid mode: '${modeArg}'`, 1);
   }
 
@@ -936,7 +1227,7 @@ function cmdChmod(ctx, args) {
     const abs = resolvePath(ctx.cwd, f, ctx.env.HOME);
     const node = ctx.fs.getNode(abs);
     if (!node) return result('', `chmod: cannot access '${f}': No such file or directory`, 1);
-    node.mode = modeArg.slice(-3);
+    node.mode = finalMode;
     node.mtime = Date.now();
   }
   return result();

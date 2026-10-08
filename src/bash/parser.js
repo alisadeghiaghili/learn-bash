@@ -310,8 +310,42 @@ export function expandWord(word, env, home = '/home/learner') {
           out += ch;
           continue;
         }
-        const name = word.slice(i + 2, end);
-        out += env[name] ?? '';
+        const inner = word.slice(i + 2, end);
+        if (inner.startsWith('#') && inner.length > 1) {
+          const varName = inner.slice(1);
+          const val = env[varName] ?? '';
+          out += String(val.length);
+          i = end;
+          continue;
+        }
+        const defIdx = inner.indexOf(':-');
+        if (defIdx !== -1) {
+          const varName = inner.slice(0, defIdx);
+          const defVal = inner.slice(defIdx + 2);
+          const val = env[varName];
+          out += (val !== undefined && val !== '') ? val : defVal;
+          i = end;
+          continue;
+        }
+        const hashIdx = inner.indexOf('#');
+        if (hashIdx !== -1) {
+          const varName = inner.slice(0, hashIdx);
+          const prefix = inner.slice(hashIdx + 1);
+          const val = env[varName] ?? '';
+          out += val.startsWith(prefix) ? val.slice(prefix.length) : val;
+          i = end;
+          continue;
+        }
+        const pctIdx = inner.indexOf('%');
+        if (pctIdx !== -1) {
+          const varName = inner.slice(0, pctIdx);
+          const suffix = inner.slice(pctIdx + 1);
+          const val = env[varName] ?? '';
+          out += val.endsWith(suffix) ? val.slice(0, -suffix.length) : val;
+          i = end;
+          continue;
+        }
+        out += env[inner] ?? '';
         i = end;
         continue;
       }

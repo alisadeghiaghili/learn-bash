@@ -255,6 +255,21 @@ test('q-curriculum', () => {
     ],
     'chk-basics': ['whoami > who.txt', 'pwd >> who.txt'],
     'chk-streams': ['grep e notes/book.txt | sort > e-lines.txt'],
+    'txt-cut-sort': ['cut -d, -f2 users.csv | sort -n > ages.txt'],
+    'txt-uniq': ['sort ips.log | uniq -c > counts.txt'],
+    'txt-tr': ['cat mixed.txt | tr A-Z a-z > clean.txt'],
+    'txt-sed': ['sed s/development/production/g config.env > prod.env'],
+    'txt-awk': ['awk \'{print $1, $3}\' servers.txt > status.txt'],
+    'txt-find-xargs': ['find logs -name *.log | xargs wc -l > audit.txt'],
+    'sec-chmod': ['chmod +x deploy.sh'],
+    'sec-links': ['ln -s config-v2.json current.conf'],
+    'prd-strict': ['set -euo pipefail'],
+    'prd-trap': ['trap \'rm -f /tmp/lock.pid\' EXIT'],
+    'prd-params': ['echo "${REGION:-us-east-1} ${IMAGE#repo/}" > deploy.txt'],
+    'prd-cli': [
+      'echo \'cp "$1" "$1.bak"\' > backup.sh',
+      'chmod +x backup.sh',
+    ],
   };
 
   for (const level of LEVELS) {
@@ -263,6 +278,7 @@ test('q-curriculum', () => {
     const shell = new Shell(buildFS(level.seed.tree), {
       cwd: level.seed.cwd,
       home: level.seed.home,
+      env: level.seed.env,
     });
     const traces = cmds.map((c) => shell.execute(c));
     const { ok, failures } = checkLevel(level, shell, traces);

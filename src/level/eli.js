@@ -773,6 +773,102 @@ Environment sanitization: secure scripts clean \`$PATH\` and reset \`$IFS\` to d
     eli20: `Validation of pipeline engineering: stream filtering, exit status integrity, and avoiding intermediate file overhead.`,
     eliphd: `Synthesis checkpoint on POSIX stream composability: unidirectional IPC, kernel buffer handoffs, and deterministic stream filtering.`,
   },
+
+  'txt-cut-sort': {
+    eli5: 'Slicing only the stickers you want from a sticker book, and lining them up from the smallest number to the biggest number!',
+    eli10: 'Like choosing column B in an Excel table and sorting the numbers from lowest to highest.',
+    eli15: '`cut -d, -f2` slices comma-separated fields. `sort -n` orders them numerically (so 10 doesn\'t precede 2). Piped together: `cut -d, -f2 file | sort -n > out`.',
+    eli20: 'Stream extraction and ordering. `cut` parses records delimited by single characters without memory buffering. `sort -n` parses ASCII digits into numbers and runs an external merge-sort if data exceeds buffer limits.',
+    eliphd: 'POSIX.1-2017 `cut` avoids heap allocations per token by sliding pointers across read buffers. `sort` manages memory footprints via polyphase merge sort across temporary disk chunks under memory pressure.',
+  },
+
+  'txt-uniq': {
+    eli5: 'Looking at a stack of duplicate playing cards, keeping only one of each, and counting how many copies you had of each card!',
+    eli10: 'Removing duplicate lines from a list, and putting a counter badge next to each one showing how many times it appeared.',
+    eli15: '`uniq` removes consecutive duplicate lines. Input must be sorted first (`sort file | uniq`). `uniq -c` prefixes lines with their count.',
+    eli20: 'Duplicate suppression algorithm. It holds only the previous line in memory, comparing it with the current line in O(1) space. It fails on unsorted streams because non-adjacent duplicates cannot be detected without a hash set.',
+    eliphd: 'Streaming deduplication in Unix utilizes O(1) space after an O(N log N) external sort. This avoids the unbounded O(N) memory overhead of an in-memory hash set, allowing multi-terabyte log analysis within tight RAM limits.',
+  },
+
+  'txt-tr': {
+    eli5: 'A secret decoder ring that instantly swaps every big letter on your paper into a little letter!',
+    eli10: 'A quick word-changer that replaces all CAPITAL letters with lowercase letters across an entire book in one second.',
+    eli15: '`tr SET1 SET2` transforms or deletes characters from stdin. `tr A-Z a-z` converts to lowercase; `tr -d \'\\r\'` strips Windows carriage returns.',
+    eli20: 'Single-byte translation filter. Operates exclusively on stdin streams. It constructs a 256-byte lookup array in memory and maps incoming bytes through `read(2)` / `write(2)` loops with zero string parsing overhead.',
+    eliphd: 'Byte-stream transducer. Direct array mapping table `uint8_t table[256]` compiled into CPU cache lines. Processes chunks via high-speed POSIX block I/O, achieving gigabytes-per-second throughput. Operates on octets, not multi-byte UTF-8 glyphs.',
+  },
+
+  'txt-sed': {
+    eli5: 'An automatic rubber stamp that finds every word "dog" in your story and replaces it with "cat" while the paper rolls by!',
+    eli10: 'A search-and-replace robot for text files: `sed s/old/new/g` changes every old word into a new word without opening an editor.',
+    eli15: '`sed` (Stream Editor) applies regex substitutions line-by-line: `s/pattern/replacement/g`. Flag `g` replaces all instances per line.',
+    eli20: 'Non-interactive stream editor executing a compiled automaton over cyclic buffers (pattern space and hold space). Processes gigabyte logs in streaming linear O(N) time with zero DOM/memory tree overhead.',
+    eliphd: 'Turing-complete stream processor. Implements an internal two-buffer cyclic model with deterministic finite automata (DFA) regex compilation. Streams through kernel page caches with near-zero latency.',
+  },
+
+  'txt-awk': {
+    eli5: 'A super-smart robot that reads your table row by row, picks only column 1 and column 3, and reads them out loud!',
+    eli10: 'A spreadsheet programming language for the command line: `$1` is column 1, `$2` is column 2, and `{print $1, $3}` prints only what you asked for.',
+    eli15: '`awk` splits lines into positional fields (`$1`..`$N`, `$0` = whole line). `awk \'{print $1, $3}\'` extracts columns. `-F` specifies custom delimiters like commas.',
+    eli20: 'Domain-specific language (Aho, Weinberger, Kernighan). Structured around BEGIN, pattern/action rules, and END blocks. Handles arithmetic, associative arrays, and record splitting without external dependencies.',
+    eliphd: 'Interpreted data-driven programming language standard IEEE Std 1003.1. Implements a virtual stack machine tailored for stream parsing. Fields are partitioned lazily via RS and FS pointers into the active line buffer without memory cloning.',
+  },
+
+  'txt-find-xargs': {
+    eli5: 'A metal detector that searches your entire room for lost toy cars, and a conveyor belt that puts them all into a toy box at once!',
+    eli10: '`find` searches all folders for files matching a name; `xargs` bundles them together and hands them to another command to process them all at once.',
+    eli15: '`find dir -name "*.log"` recursively locates files. `xargs` takes lines from stdin and turns them into CLI arguments: `find ... | xargs wc -l`.',
+    eli20: 'Directory tree traversal via opendir/readdir combined with argument chunking. `xargs` splits argument lists into batches that respect the kernel ARG_MAX ceiling, avoiding "Argument list too long" errors.',
+    eliphd: 'Filesystem dentry walker coupled with exec-argument batching. The Linux kernel imposes MAX_ARG_PAGES on execve(2). Direct glob expansion triggers E2BIG when matching hundreds of thousands of files; `xargs` breaks inputs into kernel-safe argument chunks.',
+  },
+
+  'sec-chmod': {
+    eli5: 'Putting a green permission badge on your robot script so the computer is allowed to press its start button!',
+    eli10: 'Giving a script the power to run. Files without `+x` are just text; adding `chmod +x` tells the computer it\'s an executable program.',
+    eli15: '`chmod` modifies file permissions. `chmod +x file` adds execution permissions; `chmod 755 file` sets rwxr-xr-x (owner can edit/run, others can read/run).',
+    eli20: 'POSIX file mode bitmask. Modifies the 12-bit file mode (setuid, setgid, sticky, and 3x3 rwx bits) in the filesystem inode via chmod(2). The kernel execve(2) system call strictly checks the S_IXUSR bit before spawning a process image.',
+    eliphd: 'Kernel inode attribute modification. `sys_fchmodat` updates the `i_mode` bitfield in the VFS inode structure. When executing, the kernel ELF or Shebang interpreter parser verifies user/group credentials against i_uid and process cred before allowing page table mapping.',
+  },
+
+  'sec-links': {
+    eli5: 'Making a shortcut bookmark in your browser that points directly to your favorite webpage without saving a duplicate copy!',
+    eli10: 'A symbolic link (symlink) is a shortcut pointer: editing through the shortcut edits the real original file without wasting disk space.',
+    eli15: '`ln -s TARGET LINK` creates a soft symbolic link. Unlike hard links, symlinks can span across different filesystems and point to directories.',
+    eli20: 'Filesystem pointer semantics. A hard link creates an extra directory entry (dentry) pointing to the same physical inode number. A symbolic link creates a distinct inode of type S_IFLNK containing the target path string.',
+    eliphd: 'VFS symlink resolution. When traversing paths, the kernel VFS layer calls follow_link (with a maximum recursion depth of 40 to prevent circular symlink loops, returning ELOOP). Symlink swapping via rename(2) allows atomic, zero-downtime releases.',
+  },
+
+  'prd-strict': {
+    eli5: 'Putting on a helmet, knee pads, and safety goggles before riding a bike so you stop immediately the moment anything feels loose!',
+    eli10: 'Safety guard for scripts: `set -euo pipefail` stops the script immediately if any command fails or if a variable is misspelled.',
+    eli15: 'The unofficial strict mode: `-e` exits on any command error, `-u` exits on unset/undefined variables, and `-o pipefail` catches failures inside pipelines.',
+    eli20: 'Defensive runtime discipline. Prevents silent catastrophic failures like `rm -rf "$TARGET_DIR/*"` when TARGET_DIR is empty or uninitialized. Guarantees non-zero pipeline error code propagation to the orchestrator.',
+    eliphd: 'Subshell flag registers and signal traps. `set -e` modifies errexit semantics; in pipelines, POSIX specifies that `$?` defaults to the rightmost command. `pipefail` changes this by recording the exit status of every pipeline child process, returning the code of the rightmost non-zero exiting process.',
+  },
+
+  'prd-trap': {
+    eli5: 'Leaving a note that says: "Before you turn off the light, make sure all toys are put away in the toy box!"',
+    eli10: 'An automatic cleanup routine: `trap \'rm -f temp.txt\' EXIT` guarantees temporary files and lockfiles are deleted even if your script crashes.',
+    eli15: '`trap \'ACTION\' SIGNALS...` catches signals or script completion. An `EXIT` trap executes unconditionally whenever the shell process exits.',
+    eli20: 'Signal handling and lifecycle hooks. Intercepts asynchronous Unix signals (SIGINT, SIGTERM) and synchronous shell exit (0/EXIT) via sigaction(2). Guarantees lockfile release and idempotency across distributed worker nodes.',
+    eliphd: 'Signal queue dispatch and kernel interrupt context. When a signal arrives, the kernel interrupts the user-space thread and vectors into the shell signal handler table. EXIT is a synthetic pseudo-signal executed during shell exit_shell() teardown before releasing file descriptors.',
+  },
+
+  'prd-params': {
+    eli5: '"If your lunchbox is empty, take an apple! And if your name has \'Mister \' in front of it, cut that part off!"',
+    eli10: 'Smart variable tricks: `${VAR:-default}` uses a backup value if a variable is empty, and `${VAR#prefix}` removes unwanted words from the beginning.',
+    eli15: 'Parameter expansions: `${VAR:-default}` (fallback if unset), `${VAR#prefix}` (strip prefix), `${VAR%suffix}` (strip suffix), `${#VAR}` (string length).',
+    eli20: 'In-memory string evaluation. Executes in the shell parser without calling external processes (basename, dirname, sed, cut), improving script performance by orders of magnitude.',
+    eliphd: 'AST evaluation in shell grammar IEEE 1003.1 section 2.6.2. Parameter pattern removal uses fnmatch against the variable\'s heap buffer. Because no fork/exec or pipe IPC is created, parameter expansions execute in nanoseconds directly within L1 CPU cache.',
+  },
+
+  'prd-cli': {
+    eli5: 'Writing an instruction card with blanks: "Take whatever toy the player hands you, and put it into their backpack!"',
+    eli10: 'Making a tool you can run from anywhere with arguments: `$1` is the first word you typed after the script name, and `$#` is how many words you gave it.',
+    eli15: '`$1`, `$2`..`$9` access CLI arguments. `$#` is the argument count; `"$@"` expands to all arguments quoted individually. `shift` advances through arguments.',
+    eli20: 'Modular command-line interface design. Positional parameters mirror int argc, char **argv in C programs. Defensive scripts check `[ $# -lt 1 ]` and print help usage before execution.',
+    eliphd: 'System execution ABI. When execve(2) executes a script via the shebang interpreter, the kernel pushes argv pointers and environment pointers onto the top of the new process stack frame. The shell initializes $0 from argv[0], $1..$N from argv[1..N], and sets $# to argc - 1.',
+  },
 };
 
 /**

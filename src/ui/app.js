@@ -341,6 +341,7 @@ function startLevel(id, term) {
   state.shell = new Shell(buildFS(level.seed.tree), {
     cwd: level.seed.cwd,
     home: level.seed.home,
+    env: level.seed.env,
   });
   state.seed = state.shell.capture();
   state.traces = [];

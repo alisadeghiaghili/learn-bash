@@ -908,6 +908,40 @@ export class Shell {
             i = end;
             continue;
           }
+          if (key.startsWith('#') && !key.includes('[')) {
+            const varName = key.slice(1);
+            const val = this.env[varName] ?? '';
+            out += String(val.length);
+            i = end;
+            continue;
+          }
+          const defIdx = key.indexOf(':-');
+          if (defIdx !== -1) {
+            const varName = key.slice(0, defIdx);
+            const defVal = key.slice(defIdx + 2);
+            const val = this.env[varName];
+            out += (val !== undefined && val !== '') ? val : defVal;
+            i = end;
+            continue;
+          }
+          const hashIdx = key.indexOf('#');
+          if (hashIdx !== -1) {
+            const varName = key.slice(0, hashIdx);
+            const prefix = key.slice(hashIdx + 1);
+            const val = this.env[varName] ?? '';
+            out += val.startsWith(prefix) ? val.slice(prefix.length) : val;
+            i = end;
+            continue;
+          }
+          const pctIdx = key.indexOf('%');
+          if (pctIdx !== -1) {
+            const varName = key.slice(0, pctIdx);
+            const suffix = key.slice(pctIdx + 1);
+            const val = this.env[varName] ?? '';
+            out += val.endsWith(suffix) ? val.slice(0, -suffix.length) : val;
+            i = end;
+            continue;
+          }
           out += this.env[key] ?? '';
           i = end;
           continue;
