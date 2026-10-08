@@ -269,17 +269,21 @@ export class Shell {
 
     // Array assignment: name=(a b c)
     const arr = parseArrayAssign(trimmed);
-    if (arr && !nested) {
-      this.undoStack.push(this.capture());
-      if (captureHistory) this.history.push(trimmed);
+    if (arr) {
+      if (!nested) {
+        this.undoStack.push(this.capture());
+        if (captureHistory) this.history.push(trimmed);
+      }
       this.arrays.set(arr.name, arr.items);
       this.env[arr.name] = arr.items.join(' ');
       return { line: trimmed, stages: [], stdout: '', stderr: '', code: 0, clear: false };
     }
     const append = parseArrayAppend(trimmed);
-    if (append && !nested) {
-      this.undoStack.push(this.capture());
-      if (captureHistory) this.history.push(trimmed);
+    if (append) {
+      if (!nested) {
+        this.undoStack.push(this.capture());
+        if (captureHistory) this.history.push(trimmed);
+      }
       const prev = this.arrays.get(append.name) ?? [];
       this.arrays.set(append.name, [...prev, ...append.items]);
       this.env[append.name] = this.arrays.get(append.name).join(' ');
@@ -719,8 +723,21 @@ export class Shell {
       this.env['2'] = rest[1] ?? '';
       this.env['#'] = String(rest.length);
       this.env['@'] = rest.join(' ');
+      const savedLocal = this._localScope;
+      const savedEnv = { ...this.env };
+      this._localScope = new Set();
       const body = fn.body;
       const result = this._runControlSync(body);
+      if (this._localScope) {
+        for (const key of this._localScope) {
+          if (savedEnv[key] !== undefined) {
+            this.env[key] = savedEnv[key];
+          } else {
+            delete this.env[key];
+          }
+        }
+      }
+      this._localScope = savedLocal;
       this.positional = savedPos;
       this.env['1'] = savedPos[0] ?? '';
       this.env['2'] = savedPos[1] ?? '';

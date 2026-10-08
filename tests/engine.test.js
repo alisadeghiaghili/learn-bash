@@ -270,6 +270,31 @@ test('q-curriculum', () => {
       'echo \'cp "$1" "$1.bak"\' > backup.sh',
       'chmod +x backup.sh',
     ],
+    'proc-ps-kill': [
+      'sleep 100 &',
+      'ps',
+      'kill %1',
+    ],
+    'proc-array-advanced': [
+      'arr=(frontend backend)',
+      'arr+=(devops)',
+      'echo ${#arr[@]} > len.txt',
+    ],
+    'fn-scope-local': [
+      'calc() { local secret=42; return 42; }',
+      'calc',
+      'echo $? > status.txt',
+    ],
+    'sec-stat-chown': [
+      'chown root:staff server.log',
+      'stat server.log > meta.txt',
+    ],
+    'txt-awk-filter': [
+      "awk -F, '$2 > 80 {print $1}' metrics.csv > alerts.txt",
+    ],
+    'prd-logging-stderr': [
+      'echo "[ERROR] disk full" >&2 2> err.log',
+    ],
   };
 
   for (const level of LEVELS) {

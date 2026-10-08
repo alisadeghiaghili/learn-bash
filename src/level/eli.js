@@ -869,7 +869,50 @@ Environment sanitization: secure scripts clean \`$PATH\` and reset \`$IFS\` to d
     eli20: 'Modular command-line interface design. Positional parameters mirror int argc, char **argv in C programs. Defensive scripts check `[ $# -lt 1 ]` and print help usage before execution.',
     eliphd: 'System execution ABI. When execve(2) executes a script via the shebang interpreter, the kernel pushes argv pointers and environment pointers onto the top of the new process stack frame. The shell initializes $0 from argv[0], $1..$N from argv[1..N], and sets $# to argc - 1.',
   },
+  'proc-ps-kill': {
+    eli5: 'Think of your computer as a playground. sleep & sends a kid to play quietly in the sandbox. ps is taking attendance to see who is playing. kill politely calls a kid inside when it is time to stop.',
+    eli10: 'When you run a command followed by &, bash runs it in the background so you can keep typing. ps lists every active program along with its unique Process ID (PID). Running kill %1 or kill PID sends a signal telling the background job to stop.',
+    eli15: 'Background execution (&) spawns an asynchronous subshell. The command ps queries the process table to report PID, controlling terminal (TTY), and command name. kill communicates with processes via POSIX signals (defaulting to SIGTERM/signal 15). Job specifiers like %1 reference jobs managed by the current shell session.',
+    eli20: 'Process management relies on kernel scheduling. Background jobs execute concurrently with standard input disconnected from the terminal. ps parses /proc metadata to generate tabular runtime telemetry. Running kill triggers a kill(pid, sig) syscall. Unhandled SIGTERM allows the target process to execute atexit hooks or signal handlers before termination.',
+    eliphd: 'Architecturally, asynchronous execution forks a child process where SIGINT and SIGQUIT are ignored if job control is disabled. The ps utility accesses process task structs (/proc/[pid]/stat). The kill builtin issues the POSIX kill(2) syscall, posting SIGTERM to the target process signal queue. If the process masks or catches SIGTERM, kernel-enforced termination requires non-catchable SIGKILL (signal 9).',
+  },
+  'proc-array-advanced': {
+    eli5: 'An array is like an egg carton with numbered slots. With arr+=(item) you pop another egg into the next empty slot. With ${#arr[@]} you count how many eggs are in the carton.',
+    eli10: 'Arrays hold a list of words. Instead of replacing the whole list, arr+=(value) appends new items to the end. ${#arr[@]} tells you the total number of items, and you can loop through them with for x in "${arr[@]}".',
+    eli15: 'Bash indexed arrays are zero-indexed collections. Compound assignment arr+=(x y) appends elements to the highest existing index. ${#arr[@]} evaluates to the array cardinality. Double-quoting "${arr[@]}" is critical because it expands to each element as an individually quoted string, preventing whitespace word-splitting bugs.',
+    eli20: 'Memory allocation for bash arrays is dynamic and sparse. Appending via += appends values while preserving existing keys. The ${#arr[@]} syntax performs an internal count of allocated elements in constant time. Quoted array expansion "${arr[@]}" interacts with the shell field splitting engine, suppressing IFS splitting while respecting word boundaries.',
+    eliphd: 'Under the hood, bash indexed arrays are implemented as doubly-linked lists or dynamically resized hash tables of ARRAY_ELEMENT structs. The append operator += calculates the current maximum index and attaches new entries. ${#arr[@]} returns array_num_elements(arr). Expansion of "${arr[@]}" produces an array of distinct WORD_DESC tokens, ensuring space-containing elements remain intact through POSIX quote removal.',
+  },
+  'fn-scope-local': {
+    eli5: 'Imagine you have a private diary in your room. If you write your secret on the living room wall, everyone sees it! local keeps your secret inside your own room so it does not mess up the rest of the house.',
+    eli10: 'Normally, variables created inside bash functions change things outside too! The local keyword makes a variable exist only while the function is running. return 42 ends the function and sends a specific exit status number back to $?.',
+    eli15: 'In shell scripting, all variable assignments are global by default unless explicitly scoped with local. Using local name=val isolates the identifier to the current call frame, preventing side-effects in parent scripts. return N terminates function execution with an exit status from 0 to 255, accessible via $?.',
+    eli20: 'Shell functions execute within the current process environment without forking a subprocess. Consequently, unscoped assignments overwrite global state. The local builtin leverages dynamic variable scoping: when a function scope exits, bash restores previous symbol table bindings. Exit status (return) communicates operation success or failure according to standard Unix conventions.',
+    eliphd: 'Bash implements dynamic scoping for shell functions via an internal variable context stack (variable_context). Declaring local allocates a SHELL_VAR marked with att_local in the current frame. Upon function exit, pop_scope() destroys local frames and unmasks shadowed outer symbols. The return builtin raises an internal longjmp/return flag with an 8-bit integer exit code returned to $?.',
+  },
+  'sec-stat-chown': {
+    eli5: 'Every toy box has an owner tag and a lock. stat is like reading the secret tag that tells you who made the toy, when it was made, and who owns it. chown writes a new owner name on the tag.',
+    eli10: 'Files in Linux have an ID number called an Inode and an owner. stat shows you the exact size, permissions, and Inode number of any file. chown user:group file changes who owns the file and which group can access it.',
+    eli15: 'Filesystems separate metadata from file names using Inodes. stat displays low-level filesystem telemetry: inode number, block allocation, timestamps (atime, mtime, ctime), octal permissions, and UID/GID. chown alters the file owner and group attributes, critical for server administration and multi-user security.',
+    eli20: 'The stat(2) system call populates a struct stat buffer directly from the filesystem superblock and inode tables. Ownership (st_uid, st_gid) controls POSIX permission checks against process credentials. chown(2) modifies file ownership, requiring CAP_CHOWN capability or root privileges in modern Linux kernels.',
+    eliphd: 'POSIX filesystems decouple directory entries (dentries) from inode structures. stat queries the underlying VFS via statx(2) or fstatat(2), retrieving block counts, device major/minor IDs, and inode indexes. chown invokes fchownat(2). Modifying ownership typically strips setuid/setgid security bits to prevent privilege escalation.',
+  },
+  'txt-awk-filter': {
+    eli5: 'Think of a security guard checking tickets at a concert. The guard looks at each ticket: if the ticket number is bigger than 80, the guard lets you in and writes down your name. That is awk "$2 > 80 {print $1}"!',
+    eli10: 'awk can check rules on columns before printing them. In awk -F, "$2 > 80 {print $1}" file, the rule is $2 > 80. Only rows where column 2 is greater than 80 get printed, and it prints only column 1. You do not even need grep!',
+    eli15: 'Awk programs follow the pattern pattern { action }. When a pattern expression like $2 > 80 evaluates to true, awk executes the subsequent block {print $1}. If the pattern is false, the current record is silently discarded. This combines conditional stream filtering and column projection in a single high-performance pipeline stage.',
+    eli20: 'Awk operates as a domain-specific stream processor. It tokenizes each line according to -F into positional variables $1..$NF. Relational comparisons (>, <, ==) perform automatic type coercion between numeric floating-point values and string literals. This pattern-directed scanning eliminates intermediate pipeline forks.',
+    eliphd: 'Internally, Awk execution engine compiles input scripts into an abstract syntax tree where expressions evaluate against record buffers. Field splitting assigns string pointers and numeric cache values to fields. Conditional patterns act as predicates: if the AST predicate evaluates non-zero, the action statement list executes, avoiding unnecessary pipe I/O and process context switching.',
+  },
+  'prd-logging-stderr': {
+    eli5: 'Imagine you have two mailboxes: one for clean letters (stdout) and one for alarms (stderr). If you shout an alarm into the clean letters box, the postman gets confused! >&2 puts alarms into the alarm box where they belong.',
+    eli10: 'Programs have two output streams: standard output (1) for normal data, and standard error (2) for errors and logs. Writing echo "[ERROR] ..." >&2 sends the message to stderr so it does not break pipelines that expect clean data. 2> err.log saves only the error messages.',
+    eli15: 'Standard streams separate operational payload from diagnostic telemetry. File descriptor 1 (stdout) flows down pipelines (|), while descriptor 2 (stderr) bypasses pipelines to display on the terminal. Redirecting with >&2 duplicates output to fd 2. Capturing with 2> file isolates error logs without contaminating downstream processing.',
+    eli20: 'In POSIX process design, dup2(2) redirects file descriptor tables. When commands are piped (cmd1 | cmd2), only fd 1 is connected to the pipe buffer; fd 2 inherits the parent terminal. Emitting diagnostic logs to stderr prevents corruption of JSON, CSV, or binary payloads in automation pipelines.',
+    eliphd: 'At the kernel syscall level, standard file descriptors 0, 1, and 2 represent distinct file description table pointers in task_struct->files. The operator >&2 translates to dup2(2, 1) for the duration of the command. Preserving pipeline hygiene via stderr isolation is fundamental to the Unix philosophy, preventing malformed telemetry from polluting consumer parser stages.',
+  },
 };
+
 
 /**
  * Retrieve explanation for a level at a specific ELI tier.

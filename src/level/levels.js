@@ -1785,6 +1785,10 @@ function runCheck(check, shell, traces) {
       const n = shell.fs.getNode(check.path);
       return !!n && n.mode === check.value;
     }
+    case 'file_owner_is': {
+      const n = shell.fs.getNode(check.path);
+      return !!n && n.owner === check.value;
+    }
     case 'opt_is':
       return shell[check.opt] === check.value;
     case 'trap_is':
@@ -1802,6 +1806,8 @@ function describeCheck(check) {
       return `function ${check.name} must be defined`;
     case 'file_exists':
       return `file ${check.value} must exist`;
+    case 'file_owner_is':
+      return `${check.path} owner must be ${check.value}`;
     case 'dir_exists':
       return `directory ${check.value} must exist`;
     case 'file_missing':

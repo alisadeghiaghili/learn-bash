@@ -77,3 +77,52 @@ test('cmdSet supports strict mode flags', () => {
   assert.ok(sh.optU);
   assert.ok(sh.optPipefail);
 });
+
+test('cmdPs and cmdKill manage processes', () => {
+  const sh = createSandboxShell();
+  sh.execute('sleep 100 &');
+  const psRes = sh.execute('ps');
+  assert.ok(psRes.stdout.includes('bash'));
+  assert.ok(psRes.stdout.includes('sleep 100'));
+
+  const killRes = sh.execute('kill %1');
+  assert.equal(killRes.code, 0);
+  const psRes2 = sh.execute('ps');
+  assert.ok(!psRes2.stdout.includes('sleep 100'));
+});
+
+test('cmdStat and cmdChown inspect and modify file attributes', () => {
+  const sh = createSandboxShell();
+  sh.execute('touch file.txt');
+  sh.execute('chown root:staff file.txt');
+  const node = sh.fs.getNode(sh.home + '/file.txt');
+  assert.equal(node.owner, 'root');
+
+  const statRes = sh.execute('stat file.txt');
+  assert.ok(statRes.stdout.includes('File: file.txt'));
+  assert.ok(statRes.stdout.includes('Uid: (1000/root)'));
+  assert.ok(statRes.stdout.includes('Inode:'));
+});
+
+test('cmdSort supports -k column and -t delimiter', () => {
+  const sh = createSandboxShell();
+  const res = sh.execute('printf "b:20\\na:10\\nc:30\\n" | sort -t: -k2 -n');
+  assert.equal(res.stdout, 'a:10\nb:20\nc:30\n');
+});
+
+test('cmdAwk supports conditional filters', () => {
+  const sh = createSandboxShell();
+  const res = sh.execute('printf "alice 30\\nbob 15\\ncarol 45\\n" | awk \'$2 > 20 {print $1}\'');
+  assert.equal(res.stdout, 'alice\ncarol\n');
+});
+
+test('shell functions isolate local variables', () => {
+  const sh = createSandboxShell();
+  sh.execute('VAL=global');
+  sh.execute('f() { local VAL=scoped; echo $VAL; }');
+  const res = sh.execute('f');
+  assert.equal(res.stdout, 'scoped\n');
+  const res2 = sh.execute('echo $VAL');
+  assert.equal(res2.stdout, 'global\n');
+});
+

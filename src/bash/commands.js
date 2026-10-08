@@ -84,6 +84,10 @@ const COMMANDS = {
   set: cmdSet,
   jobs: cmdJobs,
   wait: cmdWait,
+  ps: cmdPs,
+  kill: cmdKill,
+  stat: cmdStat,
+  chown: cmdChown,
   clear: cmdClear,
   uniq: cmdUniq,
   awk: cmdAwk,
@@ -109,6 +113,28 @@ const COMMANDS = {
 function cmdSort(ctx, args, stdin) {
   const reverse = args.includes('-r');
   const numeric = args.includes('-n');
+  let keyIndex = null;
+  let delim = null;
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '-k' && args[i + 1]) {
+      keyIndex = parseInt(args[i + 1], 10) - 1;
+      i += 1;
+      continue;
+    }
+    if (args[i].startsWith('-k')) {
+      keyIndex = parseInt(args[i].slice(2), 10) - 1;
+      continue;
+    }
+    if (args[i] === '-t' && args[i + 1]) {
+      delim = args[i + 1];
+      i += 1;
+      continue;
+    }
+    if (args[i].startsWith('-t')) {
+      delim = args[i].slice(2);
+      continue;
+    }
+  }
   const files = args.filter((a) => !a.startsWith('-'));
   let text = stdin ?? '';
   if (files.length) {
@@ -122,12 +148,20 @@ function cmdSort(ctx, args, stdin) {
   const lines = text.split('\n');
   if (lines[lines.length - 1] === '') lines.pop();
   lines.sort((a, b) => {
+    let valA = a;
+    let valB = b;
+    if (keyIndex !== null) {
+      const partsA = delim ? a.split(delim) : a.trim().split(/\s+/);
+      const partsB = delim ? b.split(delim) : b.trim().split(/\s+/);
+      valA = partsA[keyIndex] ?? '';
+      valB = partsB[keyIndex] ?? '';
+    }
     if (numeric) {
-      const numA = parseFloat(a) || 0;
-      const numB = parseFloat(b) || 0;
+      const numA = parseFloat(valA) || 0;
+      const numB = parseFloat(valB) || 0;
       return numA - numB;
     }
-    return a.localeCompare(b);
+    return valA.localeCompare(valB);
   });
   if (reverse) lines.reverse();
   return result(lines.map((l) => l + '\n').join(''));
@@ -239,9 +273,37 @@ function cmdAwk(ctx, args, stdin) {
   if (!printMatch) {
     return result(text ? text + (text.endsWith('\n') ? '' : '\n') : '');
   }
+  const condPart = script.slice(0, script.indexOf('{')).trim();
   const fieldExprs = printMatch[1].split(',').map((s) => s.trim());
-  const outLines = lines.map((line) => {
+  const outLines = [];
+  for (const line of lines) {
     const fields = delim ? line.split(delim) : line.trim().split(/\s+/);
+    if (condPart) {
+      let pass = true;
+      const comp = condPart.match(/^\$(\d+)\s*(>|<|>=|<=|==|!=)\s*(\S+)$/);
+      if (comp) {
+        const fVal = fields[parseInt(comp[1], 10) - 1] ?? '';
+        const op = comp[2];
+        const target = comp[3].replace(/^["']|["']$/g, '');
+        const numF = parseFloat(fVal);
+        const numT = parseFloat(target);
+        if (!isNaN(numF) && !isNaN(numT)) {
+          if (op === '>') pass = numF > numT;
+          else if (op === '<') pass = numF < numT;
+          else if (op === '>=') pass = numF >= numT;
+          else if (op === '<=') pass = numF <= numT;
+          else if (op === '==') pass = numF === numT;
+          else if (op === '!=') pass = numF !== numT;
+        } else {
+          if (op === '==') pass = fVal === target;
+          else if (op === '!=') pass = fVal !== target;
+        }
+      } else if (condPart.startsWith('/') && condPart.endsWith('/')) {
+        const re = new RegExp(condPart.slice(1, -1));
+        pass = re.test(line);
+      }
+      if (!pass) continue;
+    }
     const resolved = fieldExprs.map((fe) => {
       if (fe === '$0') return line;
       if (fe === '$NF') return fields[fields.length - 1] ?? '';
@@ -253,8 +315,8 @@ function cmdAwk(ctx, args, stdin) {
       if (fe.startsWith('"') && fe.endsWith('"')) return fe.slice(1, -1);
       return fe;
     });
-    return resolved.join(' ');
-  });
+    outLines.push(resolved.join(' '));
+  }
   return result(outLines.length ? outLines.join('\n') + '\n' : '');
 }
 
@@ -754,6 +816,89 @@ function cmdWait(ctx, args) {
   for (const j of table.jobs) j.status = 'done';
   const last = table.jobs[table.jobs.length - 1];
   return result('', '', last ? last.code : 0);
+}
+
+function cmdPs(ctx, args) {
+  const jobs = ctx.shell.jobs?.jobs ?? [];
+  let out = '  PID TTY          TIME CMD\n';
+  out += ` ${ctx.shell.pid || 1001} pts/0    00:00:00 bash\n`;
+  for (const j of jobs) {
+    if (j.status !== 'terminated') {
+      const pid = 1000 + j.id * 10;
+      out += ` ${pid} pts/0    00:00:01 ${j.command}\n`;
+    }
+  }
+  return result(out);
+}
+
+function cmdKill(ctx, args) {
+  if (!args.length) return result('', 'kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ...', 1);
+  const sig = args.find((a) => a.startsWith('-')) ?? '-TERM';
+  const targets = args.filter((a) => !a.startsWith('-'));
+  const jobs = ctx.shell.jobs?.jobs ?? [];
+  let code = 0;
+  let stderr = '';
+  for (const t of targets) {
+    if (t.startsWith('%')) {
+      const jid = parseInt(t.slice(1), 10);
+      const j = jobs.find((x) => x.id === jid);
+      if (j) {
+        j.status = 'terminated';
+      } else {
+        stderr += `kill: ${t}: no such job\n`;
+        code = 1;
+      }
+    } else {
+      const pid = parseInt(t, 10);
+      const j = jobs.find((x) => 1000 + x.id * 10 === pid);
+      if (j) {
+        j.status = 'terminated';
+      } else if (pid === (ctx.shell.pid || 1001)) {
+        stderr += `kill: cannot kill main shell\n`;
+        code = 1;
+      } else {
+        if (isNaN(pid)) {
+          stderr += `kill: ${t}: arguments must be process or job IDs\n`;
+          code = 1;
+        }
+      }
+    }
+  }
+  return result('', stderr, code);
+}
+
+function cmdStat(ctx, args) {
+  const files = args.filter((a) => !a.startsWith('-'));
+  if (!files.length) return result('', 'stat: missing operand', 1);
+  let out = '';
+  for (const f of files) {
+    const abs = resolvePath(ctx.cwd, f, ctx.env.HOME);
+    const node = ctx.fs.getNode(abs);
+    if (!node) return result('', `stat: cannot stat '${f}': No such file or directory`, 1);
+    const mode = node.mode ?? (node.type === 'dir' ? '755' : '644');
+    const size = node.type === 'file' ? node.content.length : 4096;
+    let h = 0;
+    for (let i = 0; i < abs.length; i += 1) h = (h * 31 + abs.charCodeAt(i)) | 0;
+    const inode = Math.abs(h % 1000000) + 100000;
+    out += `  File: ${f}\n  Size: ${size}\tBlocks: 8\tIO Block: 4096\t${node.type === 'dir' ? 'directory' : 'regular file'}\nInode: ${inode}\tLinks: 1\nAccess: (0${mode}/${modeToRwx(mode)})\tUid: (1000/${node.owner || 'learner'})\tGid: (1000/staff)\n`;
+  }
+  return result(out);
+}
+
+function cmdChown(ctx, args) {
+  const nonFlags = args.filter((a) => !a.startsWith('-'));
+  if (nonFlags.length < 2) return result('', 'chown: missing operand', 1);
+  const spec = nonFlags[0];
+  const [owner] = spec.split(':');
+  const files = nonFlags.slice(1);
+  for (const f of files) {
+    const abs = resolvePath(ctx.cwd, f, ctx.env.HOME);
+    const node = ctx.fs.getNode(abs);
+    if (!node) return result('', `chown: cannot access '${f}': No such file or directory`, 1);
+    node.owner = owner;
+    node.mtime = Date.now();
+  }
+  return result();
 }
 
 /**
