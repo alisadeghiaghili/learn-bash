@@ -166,6 +166,10 @@ export const fa = {
     shareXHead: (solved, total) => `یادگیری bash با LearnBash — ${solved}/${total} مرحله.`,
     shareStarting: 'سفر bash من شروع شد.',
     shareXFirst: 'محیط آزاد عملی.',
+    eliDepthTitle: 'سطح عمق مفهومی (ELI)',
+    eliTierLabel: 'سطح درک',
+    eliCurrentTier: (name) => `سطح فعلی: ${name}`,
+    eliTerminalSwitched: (name, desc) => `سطح درک به ${name} تغییر یافت (${desc}). برای تغییر سریع می‌توانید دستورات eli5 تا eliphd را بنویسید.`,
   },
   levels: {},
 };

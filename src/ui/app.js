@@ -11,6 +11,7 @@ import {
   golfScore,
   solutionProgress,
 } from '../level/levels.js';
+import { ELI_TIERS, ELI_METADATA, getEli } from '../level/eli.js';
 import { renderTree } from '../viz/tree.js';
 import { renderPipeline } from '../viz/pipeline.js';
 import { createTerminal } from './terminal.js';
@@ -76,6 +77,10 @@ const state = {
     typeof localStorage !== 'undefined'
       ? localStorage.getItem('learnbash.studyPid') ?? null
       : null,
+  eliTier:
+    typeof localStorage !== 'undefined'
+      ? localStorage.getItem('learnbash.eliTier') || 'eli15'
+      : 'eli15',
 };
 
 /** @type {any} */
@@ -425,6 +430,23 @@ function handleLine(line, term) {
     doReset(term);
     return;
   }
+  if (lower === 'eli5' || lower === 'eli10' || lower === 'eli15' || lower === 'eli20' || lower === 'eliphd' || lower === 'phd') {
+    if (raw) term.pushHistory(raw);
+    const targetTier = lower === 'phd' ? 'eliphd' : lower;
+    setEliTier(targetTier, term);
+    return;
+  }
+  if (lower.startsWith('eli ') || lower === 'eli') {
+    if (raw) term.pushHistory(raw);
+    const parts = lower.split(/\s+/);
+    if (parts.length > 1 && (ELI_TIERS.includes(parts[1]) || parts[1] === 'phd')) {
+      const targetTier = parts[1] === 'phd' ? 'eliphd' : parts[1];
+      setEliTier(targetTier, term);
+    } else {
+      setEliTier(state.eliTier, term);
+    }
+    return;
+  }
 
   const trace = state.shell.execute(line);
 
@@ -732,15 +754,77 @@ function syncTerminalHints() {
   ]);
 }
 
+function setEliTier(tier, term = null) {
+  if (!ELI_TIERS.includes(tier)) return;
+  state.eliTier = tier;
+  try {
+    localStorage.setItem('learnbash.eliTier', tier);
+  } catch {
+    /* ignore */
+  }
+  const meta = ELI_METADATA[tier] || ELI_METADATA.eli15;
+  if (term) {
+    term.print('');
+    term.printHtml(
+      `<div class="eli-term-banner" style="border-left:3px solid ${meta.color};padding-left:8px;margin:4px 0">` +
+      `<strong style="color:${meta.color}">[${escapeHtml(meta.name)}]</strong> ${escapeHtml(meta.title)} — <em>${escapeHtml(meta.perspective)}</em><br/>` +
+      `<div style="margin-top:4px">${renderMarkdown(getEli(state.level, tier))}</div>` +
+      `</div>`
+    );
+    term.focus();
+  }
+  renderDock();
+}
+
 function renderDock() {
   const dockEl = document.getElementById('dock');
   if (!dockEl) return;
   const u = t();
+  const curTier = state.eliTier || 'eli15';
+  const eliMeta = ELI_METADATA[curTier] || ELI_METADATA.eli15;
+
+  const wireDockEliTabs = () => {
+    dockEl.querySelectorAll('[data-dock-eli]').forEach((tab) => {
+      tab.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const tier = tab.getAttribute('data-dock-eli');
+        if (tier) setEliTier(tier);
+      });
+    });
+  };
+
+  const eliSection = `
+    <div class="eli-dock-section">
+      <div class="eli-dock-header">
+        <span class="eli-dock-title">${escapeHtml(u.eliDepthTitle || 'Pedagogical Depth (ELI)')}</span>
+      </div>
+      <div class="eli-tabs" role="tablist">
+        ${ELI_TIERS.map((tier) => {
+          const m = ELI_METADATA[tier];
+          const active = tier === curTier ? 'active' : '';
+          return `<button type="button" class="eli-tab ${active}" data-dock-eli="${tier}" style="--tier-color:${m.color}" title="${escapeHtml(m.title)}: ${escapeHtml(m.perspective)}">
+            <span class="eli-tab-name">${m.name}</span>
+            <span class="eli-tab-badge">${m.badge}</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="eli-card" style="border-left-color: ${eliMeta.color}">
+        <div class="eli-card-meta">
+          <span class="eli-badge" style="background:${eliMeta.color}22;color:${eliMeta.color};border:1px solid ${eliMeta.color}55">
+            ${escapeHtml(eliMeta.name)} · ${escapeHtml(eliMeta.badge)}
+          </span>
+          <span class="eli-perspective">${escapeHtml(eliMeta.perspective)}</span>
+        </div>
+        <div class="eli-text">${renderMarkdown(getEli(state.level, curTier))}</div>
+      </div>
+    </div>
+  `;
 
   if (!state.level) {
     dockEl.innerHTML = `
       <h2>${escapeHtml(u.learningGuide)}</h2>
       <p class="objective">${escapeHtml(u.guideAlwaysOn)}</p>
+      ${eliSection}
       <div class="learning-box">
         <div class="next-title">${escapeHtml(u.startHere)}</div>
         <ul>
@@ -761,6 +845,7 @@ function renderDock() {
       </ul>
       <div class="par-note">${u.guideFlashNote}</div>
     `;
+    wireDockEliTabs();
     return;
   }
 
@@ -797,6 +882,7 @@ function renderDock() {
   dockEl.innerHTML = `
     <h2>${escapeHtml(level.title)}</h2>
     <p class="objective">${escapeHtml(level.objective)}</p>
+    ${eliSection}
     ${
       level.learning?.length
         ? `<div class="learning-box">
@@ -823,6 +909,7 @@ function renderDock() {
         : ''
     }
   `;
+  wireDockEliTabs();
 }
 
 function replayLesson(term) {
@@ -835,26 +922,48 @@ function replayLesson(term) {
 
 function showLevelDialog(level) {
   const u = t();
-  const md = [
-    `### ${level.title}`,
-    '',
-    level.objective,
-    '',
-    level.brief,
-    '',
-    '```',
-    level.teach,
-    '```',
-    '',
-    level.transfer ? `**${u.transferTitle || 'Transfer'}:** ${level.transfer}` : '',
-    `**${u.hint}:** ${level.hint}`,
-    '',
-    `*${u.idealSolution(level.par)}*`,
-  ].filter(Boolean).join('\n');
+  let activeTier = state.eliTier || 'eli15';
 
-  showModal({
+  const buildBodyHtml = (tier) => {
+    const meta = ELI_METADATA[tier] || ELI_METADATA.eli15;
+    const explanation = getEli(level, tier);
+    return `
+      <div class="level-dialog-content">
+        <p class="objective">${escapeHtml(level.objective)}</p>
+        <p class="brief">${escapeHtml(level.brief)}</p>
+
+        <div class="eli-dialog-section">
+          <div class="eli-tabs modal-eli-tabs" role="tablist">
+            ${ELI_TIERS.map((tId) => {
+              const m = ELI_METADATA[tId];
+              const active = tId === tier ? 'active' : '';
+              return `<button type="button" class="eli-tab ${active}" data-modal-eli="${tId}" style="--tier-color:${m.color}">
+                <span class="eli-tab-name">${m.name}</span>
+                <span class="eli-tab-badge">${m.badge}</span>
+              </button>`;
+            }).join('')}
+          </div>
+          <div class="eli-card modal-eli-card" style="border-left-color: ${meta.color}">
+            <div class="eli-card-meta">
+              <span class="eli-badge" style="background:${meta.color}22;color:${meta.color};border:1px solid ${meta.color}55">
+                ${escapeHtml(meta.name)} · ${escapeHtml(meta.badge)}
+              </span>
+              <span class="eli-perspective">${escapeHtml(meta.perspective)}</span>
+            </div>
+            <div class="eli-text">${renderMarkdown(explanation)}</div>
+          </div>
+        </div>
+
+        ${level.transfer ? `<div class="par-note"><strong>${escapeHtml(u.transferTitle || 'Transfer')}:</strong> ${escapeHtml(level.transfer)}</div>` : ''}
+        <div class="par-note"><strong>${escapeHtml(u.hint)}:</strong> <code>${escapeHtml(level.hint)}</code></div>
+        <div class="par-note"><em>${escapeHtml(u.idealSolution(level.par))}</em></div>
+      </div>
+    `;
+  };
+
+  const modal = showModal({
     title: level.title,
-    bodyHtml: renderMarkdown(md),
+    bodyHtml: buildBodyHtml(activeTier),
     actions: [
       {
         label: u.startLevel || u.close,
@@ -864,6 +973,25 @@ function showLevelDialog(level) {
     ],
     onClose: () => termRef?.focus(),
   });
+
+  const wireModalTabs = () => {
+    modal.el.querySelectorAll('[data-modal-eli]').forEach((tab) => {
+      tab.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const newTier = tab.getAttribute('data-modal-eli');
+        if (newTier && newTier !== activeTier) {
+          activeTier = newTier;
+          setEliTier(newTier);
+          const bodyEl = modal.el.querySelector('.modal-body');
+          if (bodyEl) {
+            bodyEl.innerHTML = buildBodyHtml(activeTier);
+            wireModalTabs();
+          }
+        }
+      });
+    });
+  };
+  wireModalTabs();
 }
 
 function showSolution(term) {
@@ -917,6 +1045,7 @@ function showHelp(term) {
         <li><strong>${escapeHtml(u.solution)}:</strong> ${escapeHtml(u.solution || 'View ideal solution & run automatically')}</li>
         <li><strong>${escapeHtml(u.undo)} / ${escapeHtml(u.reset)}:</strong> ${escapeHtml(u.undo || 'Recover previous state')}</li>
         <li><strong>${escapeHtml(u.sandboxBtn)}:</strong> ${escapeHtml(u.modeSandbox || 'Free exploration sandbox')}</li>
+        <li><strong>${escapeHtml(u.eliTierLabel || 'ELI Depths')}:</strong> <code>eli5</code>, <code>eli10</code>, <code>eli15</code>, <code>eli20</code>, <code>eliphd</code></li>
       </ul>
       <p><em>${escapeHtml(u.helpCommands || 'Type help, levels, hint, solution in terminal anytime.')}</em></p>
     </div>

@@ -166,6 +166,10 @@ export const de = {
     shareXHead: (solved, total) => `bash lernen mit LearnBash — ${solved}/${total} Level.`,
     shareStarting: 'Meine bash-Reise beginnt.',
     shareXFirst: 'Hands-on Sandbox.',
+    eliDepthTitle: 'Didaktische Tiefe (ELI)',
+    eliTierLabel: 'Verständnisstufe',
+    eliCurrentTier: (name) => `Aktuelle Tiefe: ${name}`,
+    eliTerminalSwitched: (name, desc) => `Didaktische Tiefe auf ${name} gewechselt (${desc}). eli5..eliphd jederzeit tippbar.`,
   },
   levels: {},
 };

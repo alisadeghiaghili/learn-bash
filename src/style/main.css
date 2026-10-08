@@ -1445,6 +1445,159 @@ pre,
   }
 }
 
+/* —— ELI Pedagogical Depth Components —— */
+.eli-dock-section {
+  margin: 12px 0 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eli-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.eli-dock-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.eli-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 2px 0 4px 0;
+  scrollbar-width: none;
+}
+
+.eli-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.eli-tab {
+  flex: 1;
+  min-width: 58px;
+  padding: 6px 4px;
+  background: var(--bg-card, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.eli-tab:hover {
+  border-color: var(--tier-color, var(--accent));
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.eli-tab.active {
+  border-color: var(--tier-color, var(--accent));
+  background: color-mix(in srgb, var(--tier-color, var(--accent)) 15%, transparent);
+  color: var(--fg);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--tier-color, var(--accent)) 25%, transparent);
+}
+
+.eli-tab-name {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--mono);
+}
+
+.eli-tab-badge {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.eli-card {
+  background: var(--bg-card, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: var(--radius-sm, 6px);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.eli-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.eli-badge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--mono);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.eli-perspective {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.eli-text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--fg);
+}
+
+.eli-text code {
+  font-family: var(--mono);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.eli-text ul, .eli-text ol {
+  margin: 6px 0;
+  padding-inline-start: 18px;
+}
+
+.eli-text li {
+  margin: 3px 0;
+}
+
+.modal-eli-tabs {
+  margin-bottom: 10px;
+}
+
+.modal-eli-card {
+  margin-bottom: 12px;
+}
+
+.eli-term-banner {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 10px;
+  border-radius: 0 4px 4px 0;
+}
+
+html[dir='rtl'] .eli-card {
+  border-left-width: 1px;
+  border-right-width: 4px;
+}
+
 /* —— RTL audit: UI chrome follows writing mode; code/terminal stay LTR —— */
 html[dir='rtl'] .level-row,
 html[dir='rtl'] .celebrate-stats,

@@ -1,3 +1,4 @@
+import { LEVEL_ELI, getEli } from './eli.js';
 /**
  * Level definitions: deep teaching, solution checklist, transfer tasks.
  *
@@ -1441,3 +1442,12 @@ export function solutionProgress(level, doneSet, traces) {
     isCurrent: i === currentId,
   }));
 }
+
+// Attach ELI tiers to all levels
+LEVELS.forEach((level) => {
+  if (LEVEL_ELI[level.id]) {
+    level.eli = LEVEL_ELI[level.id];
+  }
+});
+
+export { getEli };

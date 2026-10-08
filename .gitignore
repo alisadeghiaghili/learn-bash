@@ -5,3 +5,7 @@ dist/
 .vite/
 output/output/
 output/playwright/*.png
+.agents/
+.claude/
+CLAUDE.md
+graphify-out/
